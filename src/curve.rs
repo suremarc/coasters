@@ -10,15 +10,15 @@ pub trait Curve {
         self.dp(u).normalize()
     }
 
-    fn binormal(&self, u: f32) -> Vec3 {
-        self.dp(u).cross(self.d2p(u)).normalize()
-    }
-
     fn normal(&self, u: f32) -> Vec3 {
         let dpdu = self.dp(u);
         let d2pdu2 = self.d2p(u);
 
         dpdu.cross(d2pdu2.cross(dpdu)).normalize()
+    }
+
+    fn binormal(&self, u: f32) -> Vec3 {
+        self.dp(u).cross(self.d2p(u)).normalize()
     }
 
     fn equidistant_resampling(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
