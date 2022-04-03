@@ -6,6 +6,21 @@ pub trait Curve {
     fn dp(&self, u: f32) -> Vec3;
     fn d2p(&self, u: f32) -> Vec3;
 
+    fn tangent(&self, u: f32) -> Vec3 {
+        self.dp(u).normalize()
+    }
+
+    fn binormal(&self, u: f32) -> Vec3 {
+        self.dp(u).cross(self.d2p(u)).normalize()
+    }
+
+    fn normal(&self, u: f32) -> Vec3 {
+        let dpdu = self.dp(u);
+        let d2pdu2 = self.d2p(u);
+
+        dpdu.cross(d2pdu2.cross(dpdu)).normalize()
+    }
+
     fn equidistant_resampling(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
         let mut u = u_start;
         let mut us = Vec::<f32>::new();
