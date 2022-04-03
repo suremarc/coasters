@@ -25,23 +25,52 @@ fn main() {
         .run();
 }
 
-fn draw_spline(mut lines: ResMut<DebugLines>) {
+fn draw_spline(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut lines: ResMut<DebugLines>,
+) {
     let spline = catmull_rom::CatmullRom3::new(vec![
-        const_vec3!([6., 12., 1.]),
-        const_vec3!([0., 8., 0.]),
-        const_vec3!([3., 4., 0.]),
-        const_vec3!([6., 0., 0.]),
-        const_vec3!([8., 4., 0.]),
-        const_vec3!([12., 2., 0.]),
-        const_vec3!([11., 10., 0.]),
-        const_vec3!([11., 19., 0.]),
+        const_vec3!([12., 0., 6.]),
+        const_vec3!([8., 0., 0.]),
+        const_vec3!([4., 0., 3.]),
+        const_vec3!([0., 0., 6.]),
+        const_vec3!([4., 0., 8.]),
+        const_vec3!([2., 0., 12.]),
+        const_vec3!([10., 0., 11.]),
+        const_vec3!([19., 0., 11.]),
     ]);
+
+    // for &pt in spline.pts.iter() {
+    //     commands.spawn_bundle(PbrBundle {
+    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
+    //             subdivisions: 4,
+    //             radius: 0.1,
+    //         })),
+    //         material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
+    //         transform: Transform::from_translation(pt),
+    //         ..Default::default()
+    //     });
+    // }
 
     let us = spline.equidistant_resampling(0., 1., 0.1);
     let pts: Vec<Vec3> = us.into_iter().map(|u| spline.p(u)).collect();
     println!("{:#?}", pts);
-    for (&p0, &p1) in pts.iter().zip(pts.iter().skip(1)) {
-        lines.line_colored(p0, p1, 0., Color::GOLD);
+    // for (&p0, &p1) in pts.iter().zip(pts.iter().skip(1)) {
+    // lines.line_colored(p0, p1, 100., Color::GOLD);
+    // }
+
+    for &pt in pts.iter() {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                subdivisions: 4,
+                radius: 0.1,
+            })),
+            material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
+            transform: Transform::from_translation(pt),
+            ..Default::default()
+        });
     }
 }
 
