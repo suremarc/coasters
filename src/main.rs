@@ -20,14 +20,6 @@ fn main() {
         .run();
 }
 
-fn piecewise_line_mesh(pts: Vec<Vec3>) -> Mesh {
-    let vertices: Vec<[f32; 3]> = pts.iter().map(Vec3::to_array).collect();
-    let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::LineStrip);
-    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-
-    mesh
-}
-
 fn draw_spline(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -44,16 +36,21 @@ fn draw_spline(
         const_vec3!([19., 0., 11.]),
     ]);
 
-    let us = spline.equidistant_resampling(0., 1., 0.1);
-    let pts: Vec<Vec3> = us.into_iter().map(|u| spline.p(u)).collect();
+    let ds: f32 = 0.1;
 
-    let mesh = meshes.add(piecewise_line_mesh(pts));
+    let us = spline.equidistant_resampling(0., 1., ds);
+    let frames: Vec<Transform> = us.iter().map(|&u| spline.frame(u)).collect();
 
-    commands.spawn_bundle(PbrBundle {
-        mesh,
-        material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
-        ..Default::default()
-    });
+    let mesh = meshes.add(Mesh::from(shape::Box::new(ds, ds, ds)));
+
+    for frame in frames.iter() {
+        commands.spawn_bundle(PbrBundle {
+            mesh: mesh.clone(),
+            material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
+            transform: *frame,
+            ..Default::default()
+        });
+    }
 }
 
 fn setup(

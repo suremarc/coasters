@@ -1,5 +1,5 @@
 use bevy::math::*;
-use bevy::prelude::Vec3;
+use bevy::prelude::{Transform, Vec3};
 
 pub trait Curve {
     fn p(&self, u: f32) -> Vec3;
@@ -19,6 +19,18 @@ pub trait Curve {
 
     fn binormal(&self, u: f32) -> Vec3 {
         self.dp(u).cross(self.d2p(u)).normalize()
+    }
+
+    fn frame(&self, u: f32) -> Transform {
+        Transform {
+            translation: self.p(u),
+            rotation: Quat::from_mat3(&Mat3::from_cols(
+                self.binormal(u),
+                self.normal(u),
+                self.tangent(u),
+            )),
+            scale: Vec3::splat(1.),
+        }
     }
 
     fn equidistant_resampling(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
