@@ -1,4 +1,5 @@
 use bevy::{math::const_vec3, prelude::*};
+use bevy_flycam::PlayerPlugin;
 use coasters::{catmull_rom, curve::Curve};
 
 fn main() {
@@ -15,6 +16,7 @@ fn main() {
         //     ..Default::default()
         // })
         .add_plugins(DefaultPlugins)
+        .add_plugin(PlayerPlugin)
         .add_startup_system(setup)
         .add_startup_system(draw_spline)
         .run();
@@ -26,31 +28,41 @@ fn draw_spline(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let spline = catmull_rom::CatmullRom3::new(vec![
-        const_vec3!([12., 0., 6.]),
-        const_vec3!([8., 0., 0.]),
-        const_vec3!([4., 0., 3.]),
-        const_vec3!([0., 0., 6.]),
-        const_vec3!([4., 0., 8.]),
-        const_vec3!([2., 0., 12.]),
-        const_vec3!([10., 0., 11.]),
-        const_vec3!([19., 0., 11.]),
+        const_vec3!([6., 12., 0.]),
+        const_vec3!([0., 8., 0.]),
+        const_vec3!([3., 4., 0.]),
+        const_vec3!([6., 0., 0.]),
+        const_vec3!([8., 4., 0.]),
+        const_vec3!([12., 2., 0.]),
+        const_vec3!([11., 10., 0.]),
+        const_vec3!([11., 19., 0.]),
     ]);
 
-    let ds: f32 = 0.1;
+    // let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList);
 
-    let us = spline.equidistant_resampling(0., 1., ds);
-    let frames: Vec<Transform> = us.iter().map(|&u| spline.frame(u)).collect();
+    // mesh.set_attribute(
+    //     Mesh::ATTRIBUTE_POSITION,
+    //     vec![
+    //         [0.0, 8.0, -0.1],
+    //         [0.0, 8.0, 0.1],
+    //         [-0.030238556, 7.9063673, -0.1],
+    //         [-0.030238556, 7.9063673, 0.1],
+    //     ],
+    // );
 
-    let mesh = meshes.add(Mesh::from(shape::Box::new(ds, ds, ds)));
+    // mesh.set_indices(Some(bevy::render::mesh::Indices::U32(vec![
+    //     0, 2, 1, 0, 3, 2,
+    // ])));
 
-    for frame in frames.iter() {
-        commands.spawn_bundle(PbrBundle {
-            mesh: mesh.clone(),
-            material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
-            transform: *frame,
-            ..Default::default()
-        });
-    }
+    // mesh.set_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0.0, 0.0, 0.0, 1.0]; 4]);
+
+    let mesh = spline.ribbon_mesh(0., 1., 1., 2.);
+
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(mesh),
+        material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
+        ..Default::default()
+    });
 }
 
 fn setup(

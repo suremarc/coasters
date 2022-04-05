@@ -1,5 +1,5 @@
 use bevy::math::*;
-use bevy::prelude::{Transform, Vec3};
+use bevy::prelude::{Mesh, Vec3};
 
 pub trait Curve {
     fn p(&self, u: f32) -> Vec3;
@@ -21,16 +21,11 @@ pub trait Curve {
         self.dp(u).cross(self.d2p(u)).normalize()
     }
 
-    fn frame(&self, u: f32) -> Transform {
-        Transform {
-            translation: self.p(u),
-            rotation: Quat::from_mat3(&Mat3::from_cols(
-                self.binormal(u),
-                self.normal(u),
-                self.tangent(u),
-            )),
-            scale: Vec3::splat(1.),
-        }
+    fn frame(&self, u: f32) -> Affine3A {
+        Affine3A::from_mat3_translation(
+            Mat3::from_cols(self.binormal(u), self.normal(u), self.tangent(u)),
+            self.p(u),
+        )
     }
 
     fn equidistant_resampling(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
@@ -45,5 +40,39 @@ pub trait Curve {
         }
 
         us
+    }
+
+    fn ribbon_mesh(&self, u_start: f32, u_end: f32, ds: f32, width: f32) -> Mesh {
+        let mut us = self.equidistant_resampling(u_start, u_end, ds);
+        // us.resize(2, 0.);
+        let ps: Vec<Vec3> = us.iter().map(|&u| self.p(u)).collect();
+        let xs: Vec<Vec3> = us.iter().map(|&u| self.binormal(u)).collect();
+
+        let mut verts: Vec<[f32; 3]> = Vec::with_capacity(us.len() * 2);
+
+        let w2 = width / 2.;
+        for (p, x) in ps.iter().zip(xs) {
+            verts.push((*p - w2 * x).to_array());
+            verts.push((*p + w2 * x).to_array());
+        }
+        println!("{:#?}", verts);
+
+        // let mut indices: Vec<u32> = Vec::with_capacity((us.len() - 1) * 2);
+        #[allow(clippy::never_loop)]
+        let indices = (0..verts.len() as u32).collect::<Vec<_>>();
+
+        println!("{:#?}", indices);
+
+        let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleStrip);
+        mesh.set_attribute(
+            Mesh::ATTRIBUTE_COLOR,
+            verts
+                .iter()
+                .map(|_| [0.0, 0.0, 0.0, 1.0])
+                .collect::<Vec<[f32; 4]>>(),
+        );
+        mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, verts);
+        mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
+        mesh
     }
 }
