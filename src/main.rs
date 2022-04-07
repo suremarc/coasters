@@ -1,6 +1,6 @@
 use bevy::{math::const_vec3, prelude::*};
 use bevy_flycam::PlayerPlugin;
-use coasters::{catmull_rom, curve::Curve};
+use coasters::curve::Curve;
 
 fn main() {
     App::new()
@@ -22,12 +22,19 @@ fn main() {
         .run();
 }
 
+fn as_float3(vals: &bevy::render::mesh::VertexAttributeValues) -> Option<&[[f32; 3]]> {
+    match vals {
+        bevy::render::mesh::VertexAttributeValues::Float32x3(values) => Some(values),
+        _ => None,
+    }
+}
+
 fn draw_spline(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let spline = catmull_rom::CatmullRom3::new(vec![
+    let spline = coasters::curve::CatmullRom3::new(vec![
         const_vec3!([6., 12., 0.]),
         const_vec3!([0., 8., 0.]),
         const_vec3!([3., 4., 0.]),
@@ -38,25 +45,43 @@ fn draw_spline(
         const_vec3!([11., 19., 0.]),
     ]);
 
-    // let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList);
+    let mesh = spline.ribbon_mesh(0., 0.1, 0.1, 1.);
 
-    // mesh.set_attribute(
-    //     Mesh::ATTRIBUTE_POSITION,
-    //     vec![
-    //         [0.0, 8.0, -0.1],
-    //         [0.0, 8.0, 0.1],
-    //         [-0.030238556, 7.9063673, -0.1],
-    //         [-0.030238556, 7.9063673, 0.1],
-    //     ],
-    // );
+    let positions = mesh
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .map(as_float3)
+        .unwrap()
+        .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
 
-    // mesh.set_indices(Some(bevy::render::mesh::Indices::U32(vec![
-    //     0, 2, 1, 0, 3, 2,
-    // ])));
+    let normals = mesh
+        .attribute(Mesh::ATTRIBUTE_NORMAL)
+        .map(as_float3)
+        .unwrap()
+        .expect("`Mesh::ATTRIBUTE_NORMAL` vertex attributes should be of type `float3`");
 
-    // mesh.set_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0.0, 0.0, 0.0, 1.0]; 4]);
+    for vert in positions {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.1,
+                ..Default::default()
+            })),
+            material: materials.add(Color::GOLD.into()),
+            transform: Transform::from_translation(Vec3::from(*vert)),
+            ..Default::default()
+        });
+    }
 
-    let mesh = spline.ribbon_mesh(0., 1., 1., 2.);
+    for (vert, normal) in positions.iter().zip(normals) {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.1,
+                ..Default::default()
+            })),
+            material: materials.add(Color::AZURE.into()),
+            transform: Transform::from_translation(Vec3::from(*vert) + Vec3::from(*normal)),
+            ..Default::default()
+        });
+    }
 
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(mesh),
