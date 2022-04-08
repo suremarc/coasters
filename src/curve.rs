@@ -195,13 +195,6 @@ fn quat_cross_term_basis(c0: Vec3, c1: Vec3) -> (Vec3, Vec3) {
     )
 }
 
-pub struct HermiteQuintic {
-    p0: Vec3,
-    _p1: Vec3,
-    weights: [f32; 5],
-    weighted_tangents: [Vec3; 5],
-}
-
 fn hermite_quintic_polynomial<T: Copy + Add<Output = T> + Mul<f32, Output = T>>(
     coefs: [T; 5],
     t: f32,
@@ -235,6 +228,14 @@ fn hermite_quintic_polynomial_derivative<T: Copy + Add<Output = T> + Mul<f32, Ou
         + coefs[4] * 4. * t.powi(3)
 }
 
+#[derive(Debug, Clone)]
+pub struct HermiteQuintic {
+    p0: Vec3,
+    _p1: Vec3,
+    weights: [f32; 5],
+    weighted_tangents: [Vec3; 5],
+}
+
 impl HermiteQuintic {
     pub fn tangent(&self, u: f32) -> Vec3 {
         hermite_quintic_polynomial(self.weighted_tangents, u)
@@ -242,8 +243,8 @@ impl HermiteQuintic {
     }
 
     fn curvature_squared(&self, u: f32) -> f32 {
-        return self.dp(u).cross(self.d2p(u)).length_squared()
-            / hermite_quintic_polynomial(self.weights, u).powi(6);
+        self.dp(u).cross(self.d2p(u)).length_squared()
+            / hermite_quintic_polynomial(self.weights, u).powi(6)
     }
 
     pub fn speed(&self, u: f32) -> f32 {
@@ -269,94 +270,115 @@ impl HermiteQuintic {
             .map(|u| self.curvature_squared(u) * self.speed(u) * 0.01)
             .sum()
     }
+
+    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HermiteQuintic {
+        let (u, v) = quat_cross_term_basis(di, df);
+        let h = 120. * (pf - pi) - 15. * (di + df);
+
+        let d4 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h - 5. * u).powi(2);
+        let d3 = -2. * h.cross(df).dot(u) * di.cross(h).dot(v)
+            - 2. * di.cross(h).dot(u) * h.cross(df).dot(v)
+            - 20. * di.cross(df).dot(v) * di.cross(df).dot(h - 5. * u);
+        let d2 = -2. * h.cross(df).dot(u) * di.cross(h).dot(u)
+            + 4. * h.cross(df).dot(v) * di.cross(h).dot(v)
+            - 100. * di.cross(df).dot(v).powi(2)
+            - 2. * di.cross(df).dot(h - 5. * u) * di.cross(df).dot(h + 5. * u);
+        let d1 = 2. * h.cross(df).dot(v) * di.cross(h).dot(u)
+            + 2. * di.cross(h).dot(v) * h.cross(df).dot(u)
+            - 20. * di.cross(df).dot(v) * di.cross(df).dot(h + 5. * u);
+        let d0 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h + 5. * u).powi(2);
+
+        let roots = roots::find_roots_quartic(d4, d3, d2, d1, d0);
+
+        roots
+            .as_ref()
+            .iter()
+            .flat_map(|&t| {
+                let cos = (1. - t.powi(2)) / (1. + t.powi(2));
+                let sin = 2. * t / (1. + t.powi(2));
+                let n = u * cos + v * sin;
+
+                println!("{}, {}", df, di);
+                println!("{}", n);
+
+                let _16k0sq = h.cross(df).dot(n) / di.cross(df).dot(n);
+                let _16k2sq = di.cross(h).dot(n) / di.cross(df).dot(n);
+
+                println!("{}, {}", _16k0sq, _16k2sq);
+
+                if _16k0sq > 0. && _16k2sq > 0. {
+                    Some((t, 0.25 * _16k0sq.sqrt(), 0.25 * _16k2sq.sqrt()))
+                } else {
+                    None
+                }
+            })
+            .flat_map(|(t, k0, k2)| [(t, -k0, k2), (t, k0, -k2)])
+            .map(|(t, k0, k2)| (2. * t.atan(), k0 - 0.75, k2 - 0.75))
+            .map(|(phi, c0, c2)| {
+                let phi0 = 0.;
+                let phi1 = phi0 + phi;
+
+                let (x0, y0) = inverse_solve_quat(di);
+                let (x2, y2) = inverse_solve_quat(df);
+
+                let a0 = x0 * phi0.cos() + y0 * phi0.sin();
+                let a2 = x2 * phi1.cos() + y2 * phi1.sin();
+
+                ((c0, c2), (a0, a2))
+            })
+            .map(|((c0, c2), (a0, a2))| {
+                let a0len2 = a0.length_squared();
+                let a2len2 = a2.length_squared();
+                let a0a2 = a0.w * a2.w - a0.xyz().dot(a2.xyz());
+
+                let w0 = a0len2;
+                let w1 = c0 * a0len2 + 0.5 * c2 * a0a2;
+                let w2 = (1. / 6.)
+                    * (4. * c0.powi(2) * a0len2
+                        + (1. + 4. * c0 * c2) * a0a2
+                        + 4. * c2.powi(2) * a2len2);
+                let w3 = 0.5 * a0a2 + c2 * a2len2;
+                let w4 = a2len2;
+
+                const I: Quat = const_quat!([1., 0., 0., 0.]);
+
+                let a0ia0 = a0.mul_vec3(Vec3::X);
+                let a2ia2 = a2.mul_vec3(Vec3::X);
+                let a0ia2 = (a0 * I * a2.conjugate() + a2 * I * a0.conjugate()).xyz();
+
+                let wt0 = a0ia0;
+                let wt1 = c0 * a0ia0 + 0.5 * c2 * a0ia2;
+                let wt2 = (1. / 6.)
+                    * (4. * c0.powi(2) * a0ia0
+                        + (1. + 4. * c0 * c2) * a0ia2
+                        + 4. * c2.powi(2) * a2ia2);
+                let wt3 = 0.5 * c0 * a0ia2 + c2 * a2ia2;
+                let wt4 = a2ia2;
+                HermiteQuintic {
+                    p0: pi,
+                    _p1: pf,
+                    weights: [w0, w1, w2, w3, w4],
+                    weighted_tangents: [wt0, wt1, wt2, wt3, wt4],
+                }
+            })
+            .max_by_key(|h| ordered_float::OrderedFloat(h.elastic_bending_energy()))
+            .unwrap()
+
+        // let (ax0, ay0) = inverse_solve_quat(d0);
+        // let (ax1, ay1) = inverse_solve_quat(d1);
+    }
 }
 
-fn helical_quintic_ph_hermite_interp(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HermiteQuintic {
-    let (u, v) = quat_cross_term_basis(di, df);
-    let h = 120. * (pf - pi) - 15. * (di + df);
+impl Curve for HermiteQuintic {
+    fn p(&self, u: f32) -> Vec3 {
+        self.p(u)
+    }
 
-    let d4 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h - 5. * u).powi(2);
-    let d3 = -2. * h.cross(df).dot(u) * di.cross(h).dot(v)
-        - 2. * di.cross(h).dot(u) * h.cross(df).dot(v)
-        - 20. * di.cross(df).dot(v) * di.cross(df).dot(h - 5. * u);
-    let d2 = -2. * h.cross(df).dot(u) * di.cross(h).dot(u)
-        + 4. * h.cross(df).dot(v) * di.cross(h).dot(v)
-        - 100. * di.cross(df).dot(v).powi(2)
-        - 2. * di.cross(df).dot(h - 5. * u) * di.cross(df).dot(h + 5. * u);
-    let d1 = 2. * h.cross(df).dot(v) * di.cross(h).dot(u)
-        + 2. * di.cross(h).dot(v) * h.cross(df).dot(u)
-        - 20. * di.cross(df).dot(v) * di.cross(df).dot(h + 5. * u);
-    let d0 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h + 5. * u).powi(2);
+    fn dp(&self, u: f32) -> Vec3 {
+        self.dp(u)
+    }
 
-    let roots = roots::find_roots_quartic(d4, d3, d2, d1, d0);
-
-    roots
-        .as_ref()
-        .iter()
-        .flat_map(|&t| {
-            let cos = (1. - t.powi(2)) / (1. + t.powi(2));
-            let sin = 2. * t / (1. + t.powi(2));
-            let n = u * cos + v * sin;
-
-            let _16k0sq = h.cross(df).dot(n) / di.cross(df).dot(n);
-            let _16k2sq = di.cross(h).dot(n) / di.cross(df).dot(n);
-
-            if _16k0sq > 0. && _16k2sq > 0. {
-                Some((t, 0.25 * _16k0sq.sqrt(), 0.25 * _16k2sq.sqrt()))
-            } else {
-                None
-            }
-        })
-        .flat_map(|(t, k0, k2)| [(t, -k0, k2), (t, k0, -k2)])
-        .map(|(t, k0, k2)| (2. * t.atan(), k0 - 0.75, k2 - 0.75))
-        .map(|(phi, c0, c2)| {
-            let phi0 = 0.;
-            let phi1 = phi0 + phi;
-
-            let (x0, y0) = inverse_solve_quat(di);
-            let (x2, y2) = inverse_solve_quat(df);
-
-            let a0 = x0 * phi0.cos() + y0 * phi0.sin();
-            let a2 = x2 * phi1.cos() + y2 * phi1.sin();
-
-            ((c0, c2), (a0, a2))
-        })
-        .map(|((c0, c2), (a0, a2))| {
-            let a0len2 = a0.length_squared();
-            let a2len2 = a2.length_squared();
-            let a0a2 = a0.w * a2.w - a0.xyz().dot(a2.xyz());
-
-            let w0 = a0len2;
-            let w1 = c0 * a0len2 + 0.5 * c2 * a0a2;
-            let w2 = (1. / 6.)
-                * (4. * c0.powi(2) * a0len2
-                    + (1. + 4. * c0 * c2) * a0a2
-                    + 4. * c2.powi(2) * a2len2);
-            let w3 = 0.5 * a0a2 + c2 * a2len2;
-            let w4 = a2len2;
-
-            const I: Quat = const_quat!([1., 0., 0., 0.]);
-
-            let a0ia0 = a0.mul_vec3(Vec3::X);
-            let a2ia2 = a2.mul_vec3(Vec3::X);
-            let a0ia2 = (a0 * I * a2.conjugate() + a2 * I * a0.conjugate()).xyz();
-
-            let wt0 = a0ia0;
-            let wt1 = c0 * a0ia0 + 0.5 * c2 * a0ia2;
-            let wt2 = (1. / 6.)
-                * (4. * c0.powi(2) * a0ia0 + (1. + 4. * c0 * c2) * a0ia2 + 4. * c2.powi(2) * a2ia2);
-            let wt3 = 0.5 * c0 * a0ia2 + c2 * a2ia2;
-            let wt4 = a2ia2;
-            HermiteQuintic {
-                p0: pi,
-                _p1: pf,
-                weights: [w0, w1, w2, w3, w4],
-                weighted_tangents: [wt0, wt1, wt2, wt3, wt4],
-            }
-        })
-        .max_by_key(|h| ordered_float::OrderedFloat(h.elastic_bending_energy()))
-        .unwrap()
-
-    // let (ax0, ay0) = inverse_solve_quat(d0);
-    // let (ax1, ay1) = inverse_solve_quat(d1);
+    fn d2p(&self, u: f32) -> Vec3 {
+        self.d2p(u)
+    }
 }

@@ -34,16 +34,23 @@ fn draw_spline(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let spline = coasters::curve::CatmullRom3::new(vec![
-        const_vec3!([6., 12., 0.]),
-        const_vec3!([0., 8., 0.]),
-        const_vec3!([3., 4., 0.]),
-        const_vec3!([6., 0., 0.]),
-        const_vec3!([8., 4., 0.]),
-        const_vec3!([12., 2., 0.]),
-        const_vec3!([11., 10., 0.]),
-        const_vec3!([11., 19., 0.]),
-    ]);
+    // let spline = coasters::curve::CatmullRom3::new(vec![
+    //     const_vec3!([6., 12., 0.]),
+    //     const_vec3!([0., 8., 0.]),
+    //     const_vec3!([3., 4., 0.]),
+    //     const_vec3!([6., 0., 0.]),
+    //     const_vec3!([8., 4., 0.]),
+    //     const_vec3!([12., 2., 0.]),
+    //     const_vec3!([11., 10., 0.]),
+    //     const_vec3!([11., 19., 0.]),
+    // ]);
+
+    const P0: Vec3 = const_vec3!([6., 12., 0.]);
+    const P1: Vec3 = const_vec3!([0., 8., 1.]);
+    const P2: Vec3 = const_vec3!([3., 4., 5.]);
+    const P3: Vec3 = const_vec3!([6., 0., 10.]);
+
+    let spline = coasters::curve::HermiteQuintic::new(P1, P2, 0.25 * (P2 - P0), 0.25 * (P3 - P1));
 
     let mesh = spline.ribbon_mesh(0., 0.1, 0.1, 1.);
 
