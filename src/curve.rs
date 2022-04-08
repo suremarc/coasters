@@ -314,8 +314,8 @@ impl HermiteQuintic {
                 let sin = 2. * t / (1. + t.powi(2));
                 let n = u * cos + v * sin;
 
-                let k0sq = 0.25 * h.cross(df).dot(n) / di.cross(df).dot(n);
-                let k2sq = 0.25 * di.cross(h).dot(n) / di.cross(df).dot(n);
+                let k0sq = 0.0625 * h.cross(df).dot(n) / di.cross(df).dot(n);
+                let k2sq = 0.0625 * di.cross(h).dot(n) / di.cross(df).dot(n);
 
                 if k0sq > 0. && k2sq > 0. {
                     Some((t, k0sq.sqrt(), k2sq.sqrt()))
