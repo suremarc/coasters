@@ -45,12 +45,19 @@ fn draw_spline(
     //     const_vec3!([11., 19., 0.]),
     // ]);
 
-    const P0: Vec3 = const_vec3!([6., 12., 0.]);
-    const P1: Vec3 = const_vec3!([0., 8., 1.]);
-    const P2: Vec3 = const_vec3!([3., 4., 5.]);
-    const P3: Vec3 = const_vec3!([6., 0., 10.]);
+    // const P0: Vec3 = const_vec3!([6., 12., 0.]);
+    // const P1: Vec3 = const_vec3!([0., 8., 1.]);
+    // const P2: Vec3 = const_vec3!([3., 4., 5.]);
+    // const P3: Vec3 = const_vec3!([6., 0., 10.]);
 
-    let spline = coasters::curve::HermiteQuintic::new(P1, P2, 0.25 * (P2 - P0), 0.25 * (P3 - P1));
+    // let spline = coasters::curve::HermiteQuintic::new(P1, P2, 0.25 * (P2 - P0), 0.25 * (P3 - P1));
+
+    const P0: Vec3 = const_vec3!([0., 0., 0.]);
+    const P1: Vec3 = const_vec3!([1., 1., 1.]);
+    const D0: Vec3 = const_vec3!([1., 0., 1.]);
+    const D1: Vec3 = const_vec3!([0., 1., 1.]);
+
+    let spline = coasters::curve::HermiteQuintic::new(P0, P1, D0, D1);
 
     // let mesh = spline.ribbon_mesh(0., 1., 0.5, 1.);
 
@@ -67,7 +74,7 @@ fn draw_spline(
     //     .unwrap()
     //     .expect("`Mesh::ATTRIBUTE_NORMAL` vertex attributes should be of type `float3`");
 
-    for p in [P0, P1, P2, P3] {
+    for p in [P0 - D0, P0, P1, P1 + D1] {
         commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
                 radius: 0.3,
@@ -80,13 +87,13 @@ fn draw_spline(
     }
 
     for position in spline
-        .equidistant_resampling_ph(0., 1., 1.)
+        .equidistant_resampling_ph(0., 1., 0.1)
         .into_iter()
         .map(|u| spline.p(u))
     {
         commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
-                radius: 0.1,
+                radius: 0.01,
                 ..Default::default()
             })),
             material: materials.add(Color::GOLD.into()),
