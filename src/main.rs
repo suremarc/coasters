@@ -57,7 +57,10 @@ fn draw_spline(
     const D0: Vec3 = const_vec3!([1., 0., 1.]);
     const D1: Vec3 = const_vec3!([0., 1., 1.]);
 
+    let start = bevy::utils::Instant::now();
     let spline = coasters::curve::HermiteQuintic::new(P0, P1, D0, D1);
+    let duration = start.elapsed();
+    println!("{}", duration.as_millis());
 
     // let mesh = spline.ribbon_mesh(0., 1., 0.5, 1.);
 
@@ -87,13 +90,13 @@ fn draw_spline(
     }
 
     for position in spline
-        .equidistant_resampling_ph(0., 1., 0.1)
+        .equidistant_resampling_ph(0., 2., 0.01)
         .into_iter()
         .map(|u| spline.p(u))
     {
         commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
-                radius: 0.01,
+                radius: 0.05,
                 ..Default::default()
             })),
             material: materials.add(Color::GOLD.into()),

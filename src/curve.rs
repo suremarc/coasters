@@ -287,7 +287,6 @@ impl HermiteQuintic {
 
     pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HermiteQuintic {
         let (u, v) = quat_cross_term_basis(di, df);
-        dbg!(u, v);
         let h = 120. * (pf - pi) - 15. * (di + df);
 
         let d4 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h - 5. * u).powi(2);
@@ -304,7 +303,6 @@ impl HermiteQuintic {
         let d0 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h + 5. * u).powi(2);
 
         let roots = roots::find_roots_quartic(d4, d3, d2, d1, d0);
-        dbg!(&roots);
 
         roots
             .as_ref()
@@ -318,12 +316,19 @@ impl HermiteQuintic {
                 let k2sq = 0.0625 * di.cross(h).dot(n) / di.cross(df).dot(n);
 
                 if k0sq > 0. && k2sq > 0. {
-                    Some((t, k0sq.sqrt(), k2sq.sqrt()))
+                    Some((t, k0sq.sqrt(), k2sq.sqrt(), n))
                 } else {
                     None
                 }
             })
-            .flat_map(|(t, k0, k2)| [(t, -k0, k2), (t, k0, -k2)])
+            .flat_map(|(t, k0, k2, n)| {
+                let x = di.cross(df).dot(h) / di.cross(df).dot(n) + 5.;
+                if x > 0. {
+                    [(t, k0, k2), (t, -k0, -k2)]
+                } else {
+                    [(t, -k0, k2), (t, k0, -k2)]
+                }
+            })
             .map(|(t, k0, k2)| (2. * t.atan(), k0 - 0.75, k2 - 0.75))
             .map(|(phi, c0, c2)| {
                 let phi0 = 0.;
@@ -340,7 +345,6 @@ impl HermiteQuintic {
             .map(|((c0, c2), (a0, a2))| {
                 let a0len2 = a0.length_squared();
                 let a2len2 = a2.length_squared();
-                // let a0a2 = a0.w * a2.w + a0.xyz().dot(a2.xyz());
                 let a0a2 = 2. * a0.dot(a2);
 
                 let w0 = a0len2;
@@ -357,11 +361,6 @@ impl HermiteQuintic {
                 let a0ia0 = a0.mul_vec3(Vec3::X);
                 let a2ia2 = a2.mul_vec3(Vec3::X);
                 let a0ia2 = (a0 * I * a2.conjugate() + a2 * I * a0.conjugate()).xyz();
-
-                let res = (1. + 3. * (c0 + c2) + 4. * c0 * c2) * a0ia2 - 30. * (pf - pi)
-                    + (6. + 6. * c0 + 4. * c0.powi(2)) * di
-                    + (6. + 6. * c2 + 4. * c2.powi(2)) * df;
-                dbg!(res);
 
                 let wt0 = a0ia0;
                 let wt1 = c0 * a0ia0 + 0.5 * c2 * a0ia2;
