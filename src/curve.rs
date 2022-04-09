@@ -187,7 +187,7 @@ impl HelicalPHQuinticSplineSegment {
             })
             .map(|(t, k0, k2)| (2. * t.atan(), k0 - 0.75, k2 - 0.75))
             .map(|(phi, c0, c2)| {
-                let phi0 = 0.;
+                let phi0 = 0.57;
                 let phi2 = phi0 + phi;
 
                 let (x0, y0) = inverse_solve_quat(di);
@@ -206,7 +206,7 @@ impl HelicalPHQuinticSplineSegment {
                 pi,
                 pf,
             })
-            .max_by_key(|h| ordered_float::OrderedFloat(h.curve().elastic_bending_energy()))
+            .min_by_key(|h| ordered_float::OrderedFloat(h.curve().elastic_bending_energy()))
             .unwrap()
     }
 
@@ -310,9 +310,9 @@ impl HermiteQuintic {
     }
 
     pub fn elastic_bending_energy(&self) -> f32 {
-        (0..100)
-            .map(|x| x as f32 * 0.01)
-            .map(|u| self.curvature_squared(u) * self.speed(u) * 0.01)
+        (0..1000)
+            .map(|x| x as f32 * 0.001)
+            .map(|u| self.curvature_squared(u) * self.speed(u) * 0.001)
             .sum()
     }
 

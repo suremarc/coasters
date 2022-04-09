@@ -59,7 +59,7 @@ fn draw_spline(
 
     let start = bevy::utils::Instant::now();
     let spline = coasters::curve::HelicalPHQuinticSplineSegment::new(P0, P1, D0, D1);
-    // let curve = spline.curve();
+    let curve = spline.curve();
     let duration = start.elapsed();
     println!("{}", duration.as_millis());
 
@@ -95,17 +95,17 @@ fn draw_spline(
         });
     }
 
-    for (vert, normal) in positions.iter().zip(normals) {
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Icosphere {
-                radius: 0.1,
-                ..Default::default()
-            })),
-            material: materials.add(Color::AZURE.into()),
-            transform: Transform::from_translation(Vec3::from(*vert) + Vec3::from(*normal)),
-            ..Default::default()
-        });
-    }
+    // for (vert, normal) in positions.iter().zip(normals) {
+    //     commands.spawn_bundle(PbrBundle {
+    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
+    //             radius: 0.1,
+    //             ..Default::default()
+    //         })),
+    //         material: materials.add(Color::SILVER.into()),
+    //         transform: Transform::from_translation(Vec3::from(*vert) + Vec3::from(*normal)),
+    //         ..Default::default()
+    //     });
+    // }
 
     // for p in [P0 - D0, P0, P1, P1 + D1] {
     //     commands.spawn_bundle(PbrBundle {
@@ -125,21 +125,21 @@ fn draw_spline(
     //     ..Default::default()
     // });
 
-    // for position in curve
-    //     .resample(0., 1., 0.1)
-    //     .into_iter()
-    //     .map(|u| frame.frame(u).translation)
-    // {
-    //     commands.spawn_bundle(PbrBundle {
-    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
-    //             radius: 0.05,
-    //             ..Default::default()
-    //         })),
-    //         material: materials.add(Color::GOLD.into()),
-    //         transform: Transform::from_translation(Vec3::from(position)),
-    //         ..Default::default()
-    //     });
-    // }
+    for position in curve
+        .resample(0., 1., 0.1)
+        .into_iter()
+        .map(|u| frame.frame(u).translation)
+    {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.1,
+                ..Default::default()
+            })),
+            material: materials.add(Color::GREEN.into()),
+            transform: Transform::from_translation(Vec3::from(position)),
+            ..Default::default()
+        });
+    }
 }
 
 fn setup(
@@ -151,12 +151,12 @@ fn setup(
     info!("Using 4x MSAA");
 
     // Plane
-    commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 8.0 })),
-        material: materials.add(Color::rgb(1., 0.9, 0.9).into()),
-        transform: Transform::from_translation(Vec3::new(4., 0., 4.)),
-        ..Default::default()
-    });
+    // commands.spawn_bundle(PbrBundle {
+    //     mesh: meshes.add(Mesh::from(shape::Plane { size: 8.0 })),
+    //     material: materials.add(Color::rgb(1., 0.9, 0.9).into()),
+    //     transform: Transform::from_translation(Vec3::new(4., 0., 4.)),
+    //     ..Default::default()
+    // });
     // Camera
     commands.spawn_bundle(PerspectiveCameraBundle {
         transform: Transform::from_matrix(Mat4::from_rotation_translation(
