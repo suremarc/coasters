@@ -1,6 +1,6 @@
 use bevy::{math::const_vec3, prelude::*};
 use bevy_flycam::PlayerPlugin;
-use coasters::curve::Curve;
+use coasters::curve::{GenericCurve, Resample};
 
 fn main() {
     App::new()
@@ -58,7 +58,7 @@ fn draw_spline(
     const D1: Vec3 = const_vec3!([0., 1., 1.]);
 
     let start = bevy::utils::Instant::now();
-    let spline = coasters::curve::HelicalPHQuinticSpline::new(P0, P1, D0, D1);
+    let spline = coasters::curve::HelicalPHQuinticSplineSegment::new(P0, P1, D0, D1);
     let curve = spline.curve();
     let duration = start.elapsed();
     println!("{}", duration.as_millis());
@@ -93,10 +93,12 @@ fn draw_spline(
     //     });
     // }
 
+    let frame = spline.euler_rodrigues_frame();
+
     for position in curve
-        .equidistant_resampling_ph(0., 1., 0.1)
+        .resample(0., 1., 0.1)
         .into_iter()
-        .map(|u| curve.p(u))
+        .map(|u| frame.frame(u).translation)
     {
         commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
@@ -104,7 +106,7 @@ fn draw_spline(
                 ..Default::default()
             })),
             material: materials.add(Color::GOLD.into()),
-            transform: Transform::from_translation(position),
+            transform: Transform::from_translation(Vec3::from(position)),
             ..Default::default()
         });
     }

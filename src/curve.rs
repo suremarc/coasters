@@ -5,7 +5,15 @@ use bevy::prelude::{Mesh, Vec3};
 
 use itertools::Itertools;
 
-pub trait Curve {
+pub trait Frame {
+    fn frame(&self, u: f32) -> Affine3A;
+}
+
+pub trait Resample {
+    fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32>;
+}
+
+pub trait GenericCurve {
     fn p(&self, u: f32) -> Vec3;
     fn dp(&self, u: f32) -> Vec3;
     fn d2p(&self, u: f32) -> Vec3;
@@ -24,15 +32,19 @@ pub trait Curve {
     fn binormal(&self, u: f32) -> Vec3 {
         self.dp(u).cross(self.d2p(u)).normalize()
     }
+}
 
+impl<T: GenericCurve> Frame for T {
     fn frame(&self, u: f32) -> Affine3A {
         Affine3A::from_mat3_translation(
             Mat3::from_cols(self.binormal(u), self.normal(u), self.tangent(u)),
             self.p(u),
         )
     }
+}
 
-    fn equidistant_resampling(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
+impl<T: GenericCurve> Resample for T {
+    fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
         let mut u = u_start;
         let mut us = Vec::<f32>::new();
         while u < u_stop {
@@ -44,54 +56,6 @@ pub trait Curve {
         }
 
         us
-    }
-
-    fn ribbon_mesh(&self, u_start: f32, u_end: f32, ds: f32, width: f32) -> Mesh {
-        let us = self.equidistant_resampling(u_start, u_end, ds);
-        // us.resize(2, 0.);
-        let ps = us.iter().map(|&u| self.p(u));
-        let xs = us.iter().map(|&u| self.binormal(u));
-
-        let mut verts: Vec<[f32; 3]> = Vec::with_capacity(us.len() * 2);
-        let mut normals = verts.clone();
-        let uvs: Vec<[f32; 2]> = (0..verts.capacity())
-            .map(|i| [(i % 2) as f32, ((i / 2) % 2) as f32])
-            .collect();
-
-        let w2 = width / 2.;
-        for (p, x) in ps.zip(xs) {
-            verts.push((p - w2 * x).to_array());
-            verts.push((p + w2 * x).to_array());
-        }
-
-        for &u in us.iter() {
-            let n = (-self.normal(u)).to_array();
-            normals.push(n);
-            normals.push(n);
-        }
-
-        // println!("{:#?}", verts);
-
-        let mut indices = (0..verts.len() as u32).collect::<Vec<_>>();
-        let mut reversed: Vec<_> = indices.clone().into_iter().rev().skip(1).collect();
-        indices.append(&mut reversed);
-
-        // println!("{:#?}", indices);
-
-        let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleStrip);
-        mesh.set_attribute(
-            Mesh::ATTRIBUTE_COLOR,
-            verts
-                .iter()
-                .map(|_| [0.0, 0.0, 0.0, 1.0])
-                .collect::<Vec<[f32; 4]>>(),
-        );
-
-        mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, verts);
-        mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
-        mesh
     }
 }
 
@@ -137,7 +101,7 @@ impl CatmullRom3 {
     }
 }
 
-impl Curve for CatmullRom3 {
+impl GenericCurve for CatmullRom3 {
     fn p(&self, u: f32) -> Vec3 {
         let (u, i) = self.normalize(u);
         self.coefs[i]
@@ -198,7 +162,8 @@ fn quat_cross_term_basis(c0: Vec3, c1: Vec3) -> (Vec3, Vec3) {
     )
 }
 
-pub struct HelicalPHQuinticSpline {
+#[derive(Copy, Clone, Debug)]
+pub struct HelicalPHQuinticSplineSegment {
     c0: f32,
     c2: f32,
     a0: Quat,
@@ -207,8 +172,8 @@ pub struct HelicalPHQuinticSpline {
     pf: Vec3,
 }
 
-impl HelicalPHQuinticSpline {
-    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HelicalPHQuinticSpline {
+impl HelicalPHQuinticSplineSegment {
+    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HelicalPHQuinticSplineSegment {
         let (u, v) = quat_cross_term_basis(di, df);
         let h = 120. * (pf - pi) - 15. * (di + df);
 
@@ -265,7 +230,7 @@ impl HelicalPHQuinticSpline {
 
                 ((c0, c2), (a0, a2))
             })
-            .map(|((c0, c2), (a0, a2))| HelicalPHQuinticSpline {
+            .map(|((c0, c2), (a0, a2))| HelicalPHQuinticSplineSegment {
                 c0,
                 c2,
                 a0,
@@ -275,6 +240,13 @@ impl HelicalPHQuinticSpline {
             })
             .max_by_key(|h| ordered_float::OrderedFloat(h.curve().elastic_bending_energy()))
             .unwrap()
+    }
+
+    pub fn euler_rodrigues_frame(&self) -> EulerRodriguesFrame {
+        EulerRodriguesFrame {
+            data: *self,
+            curve: self.curve(),
+        }
     }
 
     pub fn curve(&self) -> HermiteQuintic {
@@ -293,8 +265,8 @@ impl HelicalPHQuinticSpline {
 
         const I: Quat = const_quat!([1., 0., 0., 0.]);
 
-        let a0ia0 = self.a0.mul_vec3(Vec3::X);
-        let a2ia2 = self.a2.mul_vec3(Vec3::X);
+        let a0ia0 = (self.a0 * I * self.a0.conjugate()).xyz();
+        let a2ia2 = (self.a2 * I * self.a2.conjugate()).xyz();
         let a0ia2 = (self.a0 * I * self.a2.conjugate() + self.a2 * I * self.a0.conjugate()).xyz();
 
         let wt0 = a0ia0;
@@ -311,6 +283,25 @@ impl HelicalPHQuinticSpline {
             weights: [w0, w1, w2, w3, w4],
             weighted_tangents: [wt0, wt1, wt2, wt3, wt4],
         }
+    }
+}
+
+pub struct EulerRodriguesFrame {
+    data: HelicalPHQuinticSplineSegment,
+    curve: HermiteQuintic,
+}
+
+impl EulerRodriguesFrame {
+    pub fn frame(&self, u: f32) -> Affine3A {
+        let a = self.data.a0 * (1. - u).powi(2)
+            + (self.data.a0 * self.data.c0 + self.data.a2 * self.data.c2) * u * (1. - u)
+            + self.data.a2 * u.powi(2);
+
+        let ai = (a * Quat::from_xyzw(1., 0., 0., 0.) * a.conjugate()).xyz() / a.length_squared();
+        let aj = (a * Quat::from_xyzw(0., 1., 0., 0.) * a.conjugate()).xyz() / a.length_squared();
+        let ak = (a * Quat::from_xyzw(0., 0., 1., 0.) * a.conjugate()).xyz() / a.length_squared();
+
+        Affine3A::from_mat3_translation(Mat3::from_cols(ai, aj, ak), self.curve.p(u))
     }
 }
 
@@ -347,7 +338,7 @@ fn hermite_quintic_polynomial_derivative<T: Copy + Add<Output = T> + Mul<f32, Ou
         + coefs[4] * 4. * t.powi(3)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct HermiteQuintic {
     pi: Vec3,
     weights: [f32; 5],
@@ -388,8 +379,10 @@ impl HermiteQuintic {
             .map(|u| self.curvature_squared(u) * self.speed(u) * 0.01)
             .sum()
     }
+}
 
-    pub fn equidistant_resampling_ph(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
+impl Resample for HermiteQuintic {
+    fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
         let mut u = u_start;
         let mut us = Vec::<f32>::new();
         while u < u_stop {
@@ -401,16 +394,55 @@ impl HermiteQuintic {
     }
 }
 
-impl Curve for HermiteQuintic {
-    fn p(&self, u: f32) -> Vec3 {
-        self.p(u)
+fn ribbon_mesh<T: Frame + Resample>(
+    curve: &T,
+    u_start: f32,
+    u_end: f32,
+    ds: f32,
+    width: f32,
+) -> Mesh {
+    let us = curve.resample(u_start, u_end, ds);
+
+    let mut verts: Vec<[f32; 3]> = Vec::with_capacity(us.len() * 2);
+    let mut normals = verts.clone();
+    let uvs: Vec<[f32; 2]> = (0..verts.capacity())
+        .map(|i| [(i % 2) as f32, ((i / 2) % 2) as f32])
+        .collect();
+
+    let w2 = width / 2.;
+
+    for frame in us.into_iter().map(|u| curve.frame(u)) {
+        let p = frame.translation;
+        let x = frame.z_axis;
+        let n = frame.y_axis;
+
+        verts.push((p - w2 * x).to_array());
+        verts.push((p + w2 * x).to_array());
+
+        normals.push(n.to_array());
+        normals.push(n.to_array());
     }
 
-    fn dp(&self, u: f32) -> Vec3 {
-        self.dp(u)
-    }
+    // println!("{:#?}", verts);
 
-    fn d2p(&self, u: f32) -> Vec3 {
-        self.d2p(u)
-    }
+    let mut indices = (0..verts.len() as u32).collect::<Vec<_>>();
+    let mut reversed: Vec<_> = indices.clone().into_iter().rev().skip(1).collect();
+    indices.append(&mut reversed);
+
+    // println!("{:#?}", indices);
+
+    let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleStrip);
+    mesh.set_attribute(
+        Mesh::ATTRIBUTE_COLOR,
+        verts
+            .iter()
+            .map(|_| [0.0, 0.0, 0.0, 1.0])
+            .collect::<Vec<[f32; 4]>>(),
+    );
+
+    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, verts);
+    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
+    mesh
 }
