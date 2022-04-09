@@ -77,20 +77,23 @@ fn draw_spline(
     //     .unwrap()
     //     .expect("`Mesh::ATTRIBUTE_NORMAL` vertex attributes should be of type `float3`");
 
-    for p in [P0 - D0, P0, P1, P1 + D1] {
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Icosphere {
-                radius: 0.3,
-                ..Default::default()
-            })),
-            material: materials.add(Color::SILVER.into()),
-            transform: Transform::from_translation(p),
-            ..Default::default()
-        });
-    }
+    dbg!(P0, spline.p(0.));
+    dbg!(P1, spline.p(1.));
+
+    // for p in [P0 - D0, P0, P1, P1 + D1] {
+    //     commands.spawn_bundle(PbrBundle {
+    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
+    //             radius: 0.3,
+    //             ..Default::default()
+    //         })),
+    //         material: materials.add(Color::SILVER.into()),
+    //         transform: Transform::from_translation(p),
+    //         ..Default::default()
+    //     });
+    // }
 
     for position in spline
-        .equidistant_resampling_ph(0., 2., 0.01)
+        .equidistant_resampling_ph(0., 1., 0.1)
         .into_iter()
         .map(|u| spline.p(u))
     {

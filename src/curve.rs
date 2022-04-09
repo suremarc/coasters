@@ -214,9 +214,9 @@ fn hermite_quintic_polynomial_integral<T: Copy + Add<Output = T> + Mul<f32, Outp
     t: f32,
 ) -> T {
     coefs[0] * 0.2 * (t - 1.).powi(5)
-        + coefs[1] * (-0.2 * (t - 1.).powi(5) - 0.25 * (t - 1.).powi(4) + 0.05)
-        + coefs[2] * (0.2 * t.powi(5) - 0.5 * t.powi(4) + t.powi(3) / 3.)
-        + coefs[3] * (0.25 * t.powi(4) - 0.2 * t.powi(5))
+        + coefs[1] * (-0.2 * t.powi(5) + 0.75 * t.powi(4) - t.powi(3) + 0.5 * t.powi(2)) * 4.
+        + coefs[2] * (0.2 * t.powi(5) - 0.5 * t.powi(4) + t.powi(3) / 3.) * 6.
+        + coefs[3] * (0.25 * t.powi(4) - 0.2 * t.powi(5)) * 4.
         + coefs[4] * 0.2 * t.powi(5)
 }
 
@@ -225,9 +225,9 @@ fn hermite_quintic_polynomial_derivative<T: Copy + Add<Output = T> + Mul<f32, Ou
     t: f32,
 ) -> T {
     coefs[0] * -4. * (1. - t).powi(3)
-        + coefs[1] * (1. - 4. * t) * (1. - t).powi(2)
-        + coefs[2] * 2. * (t - 1.) * t * (2. * t - 1.)
-        + coefs[3] * (3. - 4. * t) * t.powi(2)
+        + coefs[1] * (1. - 4. * t) * (1. - t).powi(2) * 4.
+        + coefs[2] * 2. * (t - 1.) * t * (2. * t - 1.) * 6.
+        + coefs[3] * (3. - 4. * t) * t.powi(2) * 4.
         + coefs[4] * 4. * t.powi(3)
 }
 
@@ -361,6 +361,11 @@ impl HermiteQuintic {
                 let a0ia0 = a0.mul_vec3(Vec3::X);
                 let a2ia2 = a2.mul_vec3(Vec3::X);
                 let a0ia2 = (a0 * I * a2.conjugate() + a2 * I * a0.conjugate()).xyz();
+
+                let res = (1. + 3. * (c0 + c2) + 4. * c0 * c2) * a0ia2 - 30. * (pf - pi)
+                    + (6. + 6. * c0 + 4. * c0.powi(2)) * di
+                    + (6. + 6. * c2 + 4. * c2.powi(2)) * df;
+                dbg!(res);
 
                 let wt0 = a0ia0;
                 let wt1 = c0 * a0ia0 + 0.5 * c2 * a0ia2;
