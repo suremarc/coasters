@@ -9,5 +9,5 @@ edition = "2021"
 bevy = "*"
 itertools = "*"
 bevy_flycam = "*"
-roots = "*"
+roots = { git = "https://github.com/suremarc/roots" }
 ordered-float = "*"
