@@ -198,94 +198,17 @@ fn quat_cross_term_basis(c0: Vec3, c1: Vec3) -> (Vec3, Vec3) {
     )
 }
 
-fn hermite_quintic_polynomial<T: Copy + Add<Output = T> + Mul<f32, Output = T>>(
-    coefs: [T; 5],
-    t: f32,
-) -> T {
-    coefs[0] * (1. - t).powi(4)
-        + coefs[1] * (1. - t).powi(3) * t * 4.
-        + coefs[2] * ((1. - t) * t).powi(2) * 6.
-        + coefs[3] * (1. - t) * t.powi(3) * 4.
-        + coefs[4] * t.powi(4)
+pub struct HelicalPHQuinticSpline {
+    c0: f32,
+    c2: f32,
+    a0: Quat,
+    a2: Quat,
+    pi: Vec3,
+    pf: Vec3,
 }
 
-fn hermite_quintic_polynomial_integral<T: Copy + Add<Output = T> + Mul<f32, Output = T>>(
-    coefs: [T; 5],
-    t: f32,
-) -> T {
-    coefs[0] * 0.2 * (t - 1.).powi(5)
-        + coefs[1] * (-0.2 * t.powi(5) + 0.75 * t.powi(4) - t.powi(3) + 0.5 * t.powi(2)) * 4.
-        + coefs[2] * (0.2 * t.powi(5) - 0.5 * t.powi(4) + t.powi(3) / 3.) * 6.
-        + coefs[3] * (0.25 * t.powi(4) - 0.2 * t.powi(5)) * 4.
-        + coefs[4] * 0.2 * t.powi(5)
-}
-
-fn hermite_quintic_polynomial_derivative<T: Copy + Add<Output = T> + Mul<f32, Output = T>>(
-    coefs: [T; 5],
-    t: f32,
-) -> T {
-    coefs[0] * -4. * (1. - t).powi(3)
-        + coefs[1] * (1. - 4. * t) * (1. - t).powi(2) * 4.
-        + coefs[2] * 2. * (t - 1.) * t * (2. * t - 1.) * 6.
-        + coefs[3] * (3. - 4. * t) * t.powi(2) * 4.
-        + coefs[4] * 4. * t.powi(3)
-}
-
-#[derive(Debug, Clone)]
-pub struct HermiteQuintic {
-    p0: Vec3,
-    _p1: Vec3,
-    weights: [f32; 5],
-    weighted_tangents: [Vec3; 5],
-}
-
-impl HermiteQuintic {
-    pub fn tangent(&self, u: f32) -> Vec3 {
-        hermite_quintic_polynomial(self.weighted_tangents, u)
-            / hermite_quintic_polynomial(self.weights, u)
-    }
-
-    fn curvature_squared(&self, u: f32) -> f32 {
-        self.dp(u).cross(self.d2p(u)).length_squared()
-            / hermite_quintic_polynomial(self.weights, u).powi(6)
-    }
-
-    pub fn speed(&self, u: f32) -> f32 {
-        hermite_quintic_polynomial(self.weights, u)
-    }
-
-    pub fn p(&self, u: f32) -> Vec3 {
-        self.p0 + hermite_quintic_polynomial_integral(self.weighted_tangents, u)
-            - hermite_quintic_polynomial_integral(self.weighted_tangents, 0.)
-    }
-
-    pub fn dp(&self, u: f32) -> Vec3 {
-        hermite_quintic_polynomial(self.weighted_tangents, u)
-    }
-
-    pub fn d2p(&self, u: f32) -> Vec3 {
-        hermite_quintic_polynomial_derivative(self.weighted_tangents, u)
-    }
-
-    pub fn elastic_bending_energy(&self) -> f32 {
-        (0..100)
-            .map(|x| x as f32 * 0.01)
-            .map(|u| self.curvature_squared(u) * self.speed(u) * 0.01)
-            .sum()
-    }
-
-    pub fn equidistant_resampling_ph(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
-        let mut u = u_start;
-        let mut us = Vec::<f32>::new();
-        while u < u_stop {
-            us.push(u);
-            u += ds / self.speed(u);
-        }
-
-        us
-    }
-
-    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HermiteQuintic {
+impl HelicalPHQuinticSpline {
+    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HelicalPHQuinticSpline {
         let (u, v) = quat_cross_term_basis(di, df);
         let h = 120. * (pf - pi) - 15. * (di + df);
 
@@ -342,51 +265,139 @@ impl HermiteQuintic {
 
                 ((c0, c2), (a0, a2))
             })
-            .map(|((c0, c2), (a0, a2))| {
-                let a0len2 = a0.length_squared();
-                let a2len2 = a2.length_squared();
-                let a0a2 = 2. * a0.dot(a2);
-
-                let w0 = a0len2;
-                let w1 = c0 * a0len2 + 0.5 * c2 * a0a2;
-                let w2 = (1. / 6.)
-                    * (4. * c0.powi(2) * a0len2
-                        + (1. + 4. * c0 * c2) * a0a2
-                        + 4. * c2.powi(2) * a2len2);
-                let w3 = 0.5 * a0a2 + c2 * a2len2;
-                let w4 = a2len2;
-
-                const I: Quat = const_quat!([1., 0., 0., 0.]);
-
-                let a0ia0 = a0.mul_vec3(Vec3::X);
-                let a2ia2 = a2.mul_vec3(Vec3::X);
-                let a0ia2 = (a0 * I * a2.conjugate() + a2 * I * a0.conjugate()).xyz();
-
-                let res = (1. + 3. * (c0 + c2) + 4. * c0 * c2) * a0ia2 - 30. * (pf - pi)
-                    + (6. + 6. * c0 + 4. * c0.powi(2)) * di
-                    + (6. + 6. * c2 + 4. * c2.powi(2)) * df;
-                dbg!(res);
-
-                let wt0 = a0ia0;
-                let wt1 = c0 * a0ia0 + 0.5 * c2 * a0ia2;
-                let wt2 = (1. / 6.)
-                    * (4. * c0.powi(2) * a0ia0
-                        + (1. + 4. * c0 * c2) * a0ia2
-                        + 4. * c2.powi(2) * a2ia2);
-                let wt3 = 0.5 * c0 * a0ia2 + c2 * a2ia2;
-                let wt4 = a2ia2;
-                HermiteQuintic {
-                    p0: pi,
-                    _p1: pf,
-                    weights: [w0, w1, w2, w3, w4],
-                    weighted_tangents: [wt0, wt1, wt2, wt3, wt4],
-                }
+            .map(|((c0, c2), (a0, a2))| HelicalPHQuinticSpline {
+                c0,
+                c2,
+                a0,
+                a2,
+                pi,
+                pf,
             })
-            .max_by_key(|h| ordered_float::OrderedFloat(h.elastic_bending_energy()))
+            .max_by_key(|h| ordered_float::OrderedFloat(h.curve().elastic_bending_energy()))
             .unwrap()
+    }
 
-        // let (ax0, ay0) = inverse_solve_quat(d0);
-        // let (ax1, ay1) = inverse_solve_quat(d1);
+    pub fn curve(&self) -> HermiteQuintic {
+        let a0len2 = self.a0.length_squared();
+        let a2len2 = self.a2.length_squared();
+        let a0a2 = 2. * self.a0.dot(self.a2);
+
+        let w0 = a0len2;
+        let w1 = self.c0 * a0len2 + 0.5 * self.c2 * a0a2;
+        let w2 = (1. / 6.)
+            * (4. * self.c0.powi(2) * a0len2
+                + (1. + 4. * self.c0 * self.c2) * a0a2
+                + 4. * self.c2.powi(2) * a2len2);
+        let w3 = 0.5 * a0a2 + self.c2 * a2len2;
+        let w4 = a2len2;
+
+        const I: Quat = const_quat!([1., 0., 0., 0.]);
+
+        let a0ia0 = self.a0.mul_vec3(Vec3::X);
+        let a2ia2 = self.a2.mul_vec3(Vec3::X);
+        let a0ia2 = (self.a0 * I * self.a2.conjugate() + self.a2 * I * self.a0.conjugate()).xyz();
+
+        let wt0 = a0ia0;
+        let wt1 = self.c0 * a0ia0 + 0.5 * self.c2 * a0ia2;
+        let wt2 = (1. / 6.)
+            * (4. * self.c0.powi(2) * a0ia0
+                + (1. + 4. * self.c0 * self.c2) * a0ia2
+                + 4. * self.c2.powi(2) * a2ia2);
+        let wt3 = 0.5 * self.c0 * a0ia2 + self.c2 * a2ia2;
+        let wt4 = a2ia2;
+
+        HermiteQuintic {
+            pi: self.pi,
+            weights: [w0, w1, w2, w3, w4],
+            weighted_tangents: [wt0, wt1, wt2, wt3, wt4],
+        }
+    }
+}
+
+fn hermite_quintic_polynomial<T: Copy + Add<Output = T> + Mul<f32, Output = T>>(
+    coefs: [T; 5],
+    t: f32,
+) -> T {
+    coefs[0] * (1. - t).powi(4)
+        + coefs[1] * (1. - t).powi(3) * t * 4.
+        + coefs[2] * ((1. - t) * t).powi(2) * 6.
+        + coefs[3] * (1. - t) * t.powi(3) * 4.
+        + coefs[4] * t.powi(4)
+}
+
+fn hermite_quintic_polynomial_integral<T: Copy + Add<Output = T> + Mul<f32, Output = T>>(
+    coefs: [T; 5],
+    t: f32,
+) -> T {
+    coefs[0] * 0.2 * (t - 1.).powi(5)
+        + coefs[1] * (-0.2 * t.powi(5) + 0.75 * t.powi(4) - t.powi(3) + 0.5 * t.powi(2)) * 4.
+        + coefs[2] * (0.2 * t.powi(5) - 0.5 * t.powi(4) + t.powi(3) / 3.) * 6.
+        + coefs[3] * (0.25 * t.powi(4) - 0.2 * t.powi(5)) * 4.
+        + coefs[4] * 0.2 * t.powi(5)
+}
+
+fn hermite_quintic_polynomial_derivative<T: Copy + Add<Output = T> + Mul<f32, Output = T>>(
+    coefs: [T; 5],
+    t: f32,
+) -> T {
+    coefs[0] * -4. * (1. - t).powi(3)
+        + coefs[1] * (1. - 4. * t) * (1. - t).powi(2) * 4.
+        + coefs[2] * 2. * (t - 1.) * t * (2. * t - 1.) * 6.
+        + coefs[3] * (3. - 4. * t) * t.powi(2) * 4.
+        + coefs[4] * 4. * t.powi(3)
+}
+
+#[derive(Debug, Clone)]
+pub struct HermiteQuintic {
+    pi: Vec3,
+    weights: [f32; 5],
+    weighted_tangents: [Vec3; 5],
+}
+
+impl HermiteQuintic {
+    pub fn tangent(&self, u: f32) -> Vec3 {
+        hermite_quintic_polynomial(self.weighted_tangents, u)
+            / hermite_quintic_polynomial(self.weights, u)
+    }
+
+    fn curvature_squared(&self, u: f32) -> f32 {
+        self.dp(u).cross(self.d2p(u)).length_squared()
+            / hermite_quintic_polynomial(self.weights, u).powi(6)
+    }
+
+    pub fn speed(&self, u: f32) -> f32 {
+        hermite_quintic_polynomial(self.weights, u)
+    }
+
+    pub fn p(&self, u: f32) -> Vec3 {
+        self.pi + hermite_quintic_polynomial_integral(self.weighted_tangents, u)
+            - hermite_quintic_polynomial_integral(self.weighted_tangents, 0.)
+    }
+
+    pub fn dp(&self, u: f32) -> Vec3 {
+        hermite_quintic_polynomial(self.weighted_tangents, u)
+    }
+
+    pub fn d2p(&self, u: f32) -> Vec3 {
+        hermite_quintic_polynomial_derivative(self.weighted_tangents, u)
+    }
+
+    pub fn elastic_bending_energy(&self) -> f32 {
+        (0..100)
+            .map(|x| x as f32 * 0.01)
+            .map(|u| self.curvature_squared(u) * self.speed(u) * 0.01)
+            .sum()
+    }
+
+    pub fn equidistant_resampling_ph(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
+        let mut u = u_start;
+        let mut us = Vec::<f32>::new();
+        while u < u_stop {
+            us.push(u);
+            u += ds / self.speed(u);
+        }
+
+        us
     }
 }
 

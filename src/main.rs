@@ -58,7 +58,8 @@ fn draw_spline(
     const D1: Vec3 = const_vec3!([0., 1., 1.]);
 
     let start = bevy::utils::Instant::now();
-    let spline = coasters::curve::HermiteQuintic::new(P0, P1, D0, D1);
+    let spline = coasters::curve::HelicalPHQuinticSpline::new(P0, P1, D0, D1);
+    let curve = spline.curve();
     let duration = start.elapsed();
     println!("{}", duration.as_millis());
 
@@ -77,8 +78,8 @@ fn draw_spline(
     //     .unwrap()
     //     .expect("`Mesh::ATTRIBUTE_NORMAL` vertex attributes should be of type `float3`");
 
-    dbg!(P0, spline.p(0.));
-    dbg!(P1, spline.p(1.));
+    dbg!(P0, curve.p(0.));
+    dbg!(P1, curve.p(1.));
 
     // for p in [P0 - D0, P0, P1, P1 + D1] {
     //     commands.spawn_bundle(PbrBundle {
@@ -92,10 +93,10 @@ fn draw_spline(
     //     });
     // }
 
-    for position in spline
+    for position in curve
         .equidistant_resampling_ph(0., 1., 0.1)
         .into_iter()
-        .map(|u| spline.p(u))
+        .map(|u| curve.p(u))
     {
         commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
@@ -107,45 +108,6 @@ fn draw_spline(
             ..Default::default()
         });
     }
-
-    // println!(
-    //     "{:#?}",
-    //     spline
-    //         .equidistant_resampling_ph(0., 1., 1.)
-    //         .into_iter()
-    //         .map(|u| spline.dp(u))
-    //         .collect::<Vec<Vec3>>()
-    // );
-
-    // for vert in positions {
-    //     commands.spawn_bundle(PbrBundle {
-    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
-    //             radius: 0.1,
-    //             ..Default::default()
-    //         })),
-    //         material: materials.add(Color::GOLD.into()),
-    //         transform: Transform::from_translation(Vec3::from(*vert)),
-    //         ..Default::default()
-    //     });
-    // }
-
-    // for (vert, normal) in positions.iter().zip(normals) {
-    //     commands.spawn_bundle(PbrBundle {
-    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
-    //             radius: 0.1,
-    //             ..Default::default()
-    //         })),
-    //         material: materials.add(Color::AZURE.into()),
-    //         transform: Transform::from_translation(Vec3::from(*vert) + Vec3::from(*normal)),
-    //         ..Default::default()
-    //     });
-    // }
-
-    // commands.spawn_bundle(PbrBundle {
-    //     mesh: meshes.add(mesh),
-    //     material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
-    //     ..Default::default()
-    // });
 }
 
 fn setup(
