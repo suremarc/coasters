@@ -78,9 +78,6 @@ fn draw_spline(
     //     .unwrap()
     //     .expect("`Mesh::ATTRIBUTE_NORMAL` vertex attributes should be of type `float3`");
 
-    dbg!(P0, curve.p(0.));
-    dbg!(P1, curve.p(1.));
-
     // for p in [P0 - D0, P0, P1, P1 + D1] {
     //     commands.spawn_bundle(PbrBundle {
     //         mesh: meshes.add(Mesh::from(shape::Icosphere {
