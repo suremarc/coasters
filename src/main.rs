@@ -61,14 +61,14 @@ fn draw_spline(
     let spline = coasters::curve::HelicalPHQuinticSplineSegment::new(P0, P1, D0, D1);
     let curve = spline.curve();
     let duration = start.elapsed();
-    println!("{}", duration.as_millis());
+    println!("{}", duration.as_micros());
 
     let frame = spline.euler_rodrigues_frame();
 
     let m_start = bevy::utils::Instant::now();
     let mesh = coasters::curve::ribbon_mesh(&frame, 0., 1., 0.1, 1.);
     let m_duration = m_start.elapsed();
-    println!("{}", m_duration.as_millis());
+    println!("{}", m_duration.as_micros());
 
     let positions = mesh
         .attribute(Mesh::ATTRIBUTE_POSITION)

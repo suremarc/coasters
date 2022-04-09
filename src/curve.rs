@@ -154,7 +154,7 @@ impl HelicalPHQuinticSplineSegment {
             - 20. * di.cross(df).dot(v) * di.cross(df).dot(h + 5. * u);
         let d0 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h + 5. * u).powi(2);
 
-        // USe f64 precision for best results.
+        // Use f64 precision for best results.
         // f32 can sometimes results in NaNs.
         let roots =
             roots::find_roots_quartic(d4 as f64, d3 as f64, d2 as f64, d1 as f64, d0 as f64);
