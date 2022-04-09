@@ -154,12 +154,16 @@ impl HelicalPHQuinticSplineSegment {
             - 20. * di.cross(df).dot(v) * di.cross(df).dot(h + 5. * u);
         let d0 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h + 5. * u).powi(2);
 
-        let roots = roots::find_roots_quartic(d4, d3, d2, d1, d0);
+        // USe f64 precision for best results.
+        // f32 can sometimes results in NaNs.
+        let roots =
+            roots::find_roots_quartic(d4 as f64, d3 as f64, d2 as f64, d1 as f64, d0 as f64);
 
         roots
             .as_ref()
             .iter()
-            .flat_map(|&t| {
+            .map(|&t| t as f32)
+            .flat_map(|t| {
                 let cos = (1. - t.powi(2)) / (1. + t.powi(2));
                 let sin = 2. * t / (1. + t.powi(2));
                 let n = u * cos + v * sin;
@@ -255,8 +259,14 @@ pub struct EulerRodriguesFrame {
     curve: HermiteQuintic,
 }
 
-impl EulerRodriguesFrame {
-    pub fn frame(&self, u: f32) -> Affine3A {
+impl Resample for EulerRodriguesFrame {
+    fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
+        self.curve.resample(u_start, u_stop, ds)
+    }
+}
+
+impl Frame for EulerRodriguesFrame {
+    fn frame(&self, u: f32) -> Affine3A {
         let a = self.data.a0 * (1. - u).powi(2)
             + (self.data.a0 * self.data.c0 + self.data.a2 * self.data.c2) * u * (1. - u)
             + self.data.a2 * u.powi(2);
@@ -282,11 +292,6 @@ impl HermiteQuintic {
             / hermite_quintic_polynomial(self.weights, u)
     }
 
-    fn curvature_squared(&self, u: f32) -> f32 {
-        self.dp(u).cross(self.d2p(u)).length_squared()
-            / hermite_quintic_polynomial(self.weights, u).powi(6)
-    }
-
     pub fn speed(&self, u: f32) -> f32 {
         hermite_quintic_polynomial(self.weights, u)
     }
@@ -310,6 +315,11 @@ impl HermiteQuintic {
             .map(|u| self.curvature_squared(u) * self.speed(u) * 0.01)
             .sum()
     }
+
+    fn curvature_squared(&self, u: f32) -> f32 {
+        self.dp(u).cross(self.d2p(u)).length_squared()
+            / hermite_quintic_polynomial(self.weights, u).powi(6)
+    }
 }
 
 impl Resample for HermiteQuintic {
@@ -325,7 +335,7 @@ impl Resample for HermiteQuintic {
     }
 }
 
-fn ribbon_mesh<T: Frame + Resample>(
+pub fn ribbon_mesh<T: Frame + Resample>(
     curve: &T,
     u_start: f32,
     u_end: f32,

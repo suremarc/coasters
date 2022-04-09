@@ -1,6 +1,6 @@
 use bevy::{math::const_vec3, prelude::*};
 use bevy_flycam::PlayerPlugin;
-use coasters::curve::{GenericCurve, Resample};
+use coasters::curve::{Frame, GenericCurve, Resample};
 
 fn main() {
     App::new()
@@ -53,30 +53,59 @@ fn draw_spline(
     // let spline = coasters::curve::HermiteQuintic::new(P1, P2, 0.25 * (P2 - P0), 0.25 * (P3 - P1));
 
     const P0: Vec3 = const_vec3!([0., 0., 0.]);
-    const P1: Vec3 = const_vec3!([1., 1., 1.]);
-    const D0: Vec3 = const_vec3!([1., 0., 1.]);
-    const D1: Vec3 = const_vec3!([0., 1., 1.]);
+    const P1: Vec3 = const_vec3!([8., 8., 8.]);
+    const D0: Vec3 = const_vec3!([8., 0., 8.]);
+    const D1: Vec3 = const_vec3!([0., 8., 8.]);
 
     let start = bevy::utils::Instant::now();
     let spline = coasters::curve::HelicalPHQuinticSplineSegment::new(P0, P1, D0, D1);
-    let curve = spline.curve();
+    // let curve = spline.curve();
     let duration = start.elapsed();
     println!("{}", duration.as_millis());
 
-    // let mesh = spline.ribbon_mesh(0., 1., 0.5, 1.);
+    let frame = spline.euler_rodrigues_frame();
 
-    // let positions = mesh
-    //     .attribute(Mesh::ATTRIBUTE_POSITION)
-    //     .map(as_float3)
-    //     .unwrap()
-    //     .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
+    let m_start = bevy::utils::Instant::now();
+    let mesh = coasters::curve::ribbon_mesh(&frame, 0., 1., 0.1, 1.);
+    let m_duration = m_start.elapsed();
+    println!("{}", m_duration.as_millis());
+
+    let positions = mesh
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .map(as_float3)
+        .unwrap()
+        .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
     // println!("{:#?}", positions);
 
-    // let normals = mesh
-    //     .attribute(Mesh::ATTRIBUTE_NORMAL)
-    //     .map(as_float3)
-    //     .unwrap()
-    //     .expect("`Mesh::ATTRIBUTE_NORMAL` vertex attributes should be of type `float3`");
+    let normals = mesh
+        .attribute(Mesh::ATTRIBUTE_NORMAL)
+        .map(as_float3)
+        .unwrap()
+        .expect("`Mesh::ATTRIBUTE_NORMAL` vertex attributes should be of type `float3`");
+
+    for vert in positions {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.1,
+                ..Default::default()
+            })),
+            material: materials.add(Color::GOLD.into()),
+            transform: Transform::from_translation(Vec3::from(*vert)),
+            ..Default::default()
+        });
+    }
+
+    for (vert, normal) in positions.iter().zip(normals) {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.1,
+                ..Default::default()
+            })),
+            material: materials.add(Color::AZURE.into()),
+            transform: Transform::from_translation(Vec3::from(*vert) + Vec3::from(*normal)),
+            ..Default::default()
+        });
+    }
 
     // for p in [P0 - D0, P0, P1, P1 + D1] {
     //     commands.spawn_bundle(PbrBundle {
@@ -90,23 +119,27 @@ fn draw_spline(
     //     });
     // }
 
-    let frame = spline.euler_rodrigues_frame();
+    // commands.spawn_bundle(PbrBundle {
+    //     mesh: meshes.add(mesh),
+    //     material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
+    //     ..Default::default()
+    // });
 
-    for position in curve
-        .resample(0., 1., 0.1)
-        .into_iter()
-        .map(|u| frame.frame(u).translation)
-    {
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Icosphere {
-                radius: 0.05,
-                ..Default::default()
-            })),
-            material: materials.add(Color::GOLD.into()),
-            transform: Transform::from_translation(Vec3::from(position)),
-            ..Default::default()
-        });
-    }
+    // for position in curve
+    //     .resample(0., 1., 0.1)
+    //     .into_iter()
+    //     .map(|u| frame.frame(u).translation)
+    // {
+    //     commands.spawn_bundle(PbrBundle {
+    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
+    //             radius: 0.05,
+    //             ..Default::default()
+    //         })),
+    //         material: materials.add(Color::GOLD.into()),
+    //         transform: Transform::from_translation(Vec3::from(position)),
+    //         ..Default::default()
+    //     });
+    // }
 }
 
 fn setup(
