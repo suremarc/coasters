@@ -67,86 +67,56 @@ impl<T: Curve> Resample for Spline<T> {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct HelicalPHQuinticCurve {
-    c0: f32,
-    c2: f32,
+pub struct QuinticPHCurve {
     a0: Quat,
+    a1: Quat,
     a2: Quat,
     pi: Vec3,
-    pf: Vec3,
 }
 
-impl HelicalPHQuinticCurve {
-    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HelicalPHQuinticCurve {
-        // dbg!(pi, pf, di, df);
-        let (u, v) = quat_cross_term_basis(di, df);
-        let h = 120. * (pf - pi) - 15. * (di + df);
+impl QuinticPHCurve {
+    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> QuinticPHCurve {
+        let dp = pf - pi;
+        let (q, _) = inverse_solve_quat(di + df);
+        // dbg!(q.length());
+        let q_normalized = q.normalize();
+        let q_normalized_inv = q_normalized.conjugate();
+        let (tdi, tdf) = (q_normalized_inv.mul_vec3(di), q_normalized_inv.mul_vec3(df));
 
-        let d4 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h - 5. * u).powi(2);
-        let d3 = -2. * h.cross(df).dot(u) * di.cross(h).dot(v)
-            - 2. * di.cross(h).dot(u) * h.cross(df).dot(v)
-            - 20. * di.cross(df).dot(v) * di.cross(df).dot(h - 5. * u);
-        let d2 = -2. * h.cross(df).dot(u) * di.cross(h).dot(u)
-            + 4. * h.cross(df).dot(v) * di.cross(h).dot(v)
-            - 100. * di.cross(df).dot(v).powi(2)
-            - 2. * di.cross(df).dot(h - 5. * u) * di.cross(df).dot(h + 5. * u);
-        let d1 = 2. * h.cross(df).dot(v) * di.cross(h).dot(u)
-            + 2. * di.cross(h).dot(v) * h.cross(df).dot(u)
-            - 20. * di.cross(df).dot(v) * di.cross(df).dot(h + 5. * u);
-        let d0 = h.cross(df).dot(u) * di.cross(h).dot(u) - di.cross(df).dot(h + 5. * u).powi(2);
-        // dbg!(d4, d3, d2, d1, d0);
+        let (ta0, _) = inverse_solve_quat(tdi);
+        let (ta2, _) = inverse_solve_quat(tdf);
 
-        // Use f64 precision for best results.
-        // f32 can sometimes results in NaNs.
-        let roots =
-            roots::find_roots_quartic(d4 as f64, d3 as f64, d2 as f64, d1 as f64, d0 as f64);
+        [(ta0, ta2), (-ta0, ta2), (ta0, -ta2), (-ta0, -ta2)]
+            .into_iter()
+            .map(|(ta0, ta2)| {
+                const I: Quat = const_quat!([1., 0., 0., 0.]);
+                let c = 120. * q_normalized_inv.mul_vec3(dp) - 15. * (tdi + tdf)
+                    + 5. * (ta0 * I * ta2.conjugate() + ta2 * I * ta0.conjugate()).xyz();
+                let [l, mu, nu] = c.normalize().to_array();
+                let ta1 = (ta0 + ta2) * -0.75
+                    + Quat::from_xyzw(1., mu / (1. + l), nu / (1. + l), 0.)
+                        * 0.25
+                        * (0.5 * (1. + l) * c.length()).sqrt();
 
-        roots
-            .as_ref()
-            .iter()
-            .map(|&t| t as f32)
-            .flat_map(|t| {
-                let cos = (1. - t.powi(2)) / (1. + t.powi(2));
-                let sin = 2. * t / (1. + t.powi(2));
-                let n = u * cos + v * sin;
+                let sum = ta0 * 3. + ta1 * 4. + ta2 * 3.;
+                let ta0ia2 = (ta0 * I * ta2.conjugate() + ta2 * I * ta0.conjugate()).xyz();
+                dbg!(
+                    (sum * I * sum.conjugate()).xyz() - 120. * q_normalized_inv.mul_vec3(dp)
+                        + 15. * (tdi + tdf)
+                        - 5. * ta0ia2
+                );
 
-                let k0sq = 0.0625 * h.cross(df).dot(n) / di.cross(df).dot(n);
-                let k2sq = 0.0625 * di.cross(h).dot(n) / di.cross(df).dot(n);
-
-                if k0sq > 0. && k2sq > 0. {
-                    Some((t, k0sq.sqrt(), k2sq.sqrt(), n))
-                } else {
-                    None
-                }
+                (ta0, ta1, ta2)
             })
-            .flat_map(|(t, k0, k2, n)| {
-                let x = di.cross(df).dot(h) / di.cross(df).dot(n) + 5.;
-                if x > 0. {
-                    [(t, k0, k2), (t, -k0, -k2)]
-                } else {
-                    [(t, -k0, k2), (t, k0, -k2)]
-                }
-            })
-            .map(|(t, k0, k2)| (2. * t.atan(), k0 - 0.75, k2 - 0.75))
-            .map(|(phi, c0, c2)| {
-                let phi0 = 0.57;
-                let phi2 = phi0 + phi;
+            .map(|(ta0, ta1, ta2)| (q_normalized * ta0, q_normalized * ta1, q_normalized * ta2))
+            .map(|(a0, a1, a2)| {
+                const I: Quat = const_quat!([1., 0., 0., 0.]);
 
-                let (x0, y0) = inverse_solve_quat(di);
-                let (x2, y2) = inverse_solve_quat(df);
+                let sum = a0 * 3. + a1 * 4. + a2 * 3.;
+                let a0ia2 = (a0 * I * a2.conjugate() + a2 * I * a0.conjugate()).xyz();
+                dbg!((sum * I * sum.conjugate()).xyz() - 120. * dp + 15. * (di + df) - 5. * a0ia2);
 
-                let a0 = x0 * phi0.cos() + y0 * phi0.sin();
-                let a2 = x2 * phi2.cos() + y2 * phi2.sin();
-
-                ((c0, c2), (a0, a2))
-            })
-            .map(|((c0, c2), (a0, a2))| HelicalPHQuinticCurve {
-                c0,
-                c2,
-                a0,
-                a2,
-                pi,
-                pf,
+                QuinticPHCurve { a0, a1, a2, pi }
             })
             .min_by_key(|h| ordered_float::OrderedFloat(h.curve().elastic_bending_energy()))
             .unwrap()
@@ -161,31 +131,31 @@ impl HelicalPHQuinticCurve {
 
     pub fn curve(&self) -> HermiteQuintic {
         let a0len2 = self.a0.length_squared();
+        let a1len2 = self.a1.length_squared();
         let a2len2 = self.a2.length_squared();
+        let a0a1 = 2. * self.a0.dot(self.a1);
         let a0a2 = 2. * self.a0.dot(self.a2);
+        let a1a2 = 2. * self.a1.dot(self.a2);
 
         let w0 = a0len2;
-        let w1 = self.c0 * a0len2 + 0.5 * self.c2 * a0a2;
-        let w2 = (1. / 6.)
-            * (4. * self.c0.powi(2) * a0len2
-                + (1. + 4. * self.c0 * self.c2) * a0a2
-                + 4. * self.c2.powi(2) * a2len2);
-        let w3 = 0.5 * self.c0 * a0a2 + self.c2 * a2len2;
+        let w1 = 0.5 * a0a1;
+        let w2 = (1. / 6.) * (a0a2 + 4. * a1len2);
+        let w3 = 0.5 * a1a2;
         let w4 = a2len2;
 
         const I: Quat = const_quat!([1., 0., 0., 0.]);
 
         let a0ia0 = (self.a0 * I * self.a0.conjugate()).xyz();
+        let a1ia1 = (self.a1 * I * self.a1.conjugate()).xyz();
         let a2ia2 = (self.a2 * I * self.a2.conjugate()).xyz();
+        let a0ia1 = (self.a0 * I * self.a1.conjugate() + self.a1 * I * self.a0.conjugate()).xyz();
         let a0ia2 = (self.a0 * I * self.a2.conjugate() + self.a2 * I * self.a0.conjugate()).xyz();
+        let a1ia2 = (self.a1 * I * self.a2.conjugate() + self.a2 * I * self.a1.conjugate()).xyz();
 
         let wt0 = a0ia0;
-        let wt1 = self.c0 * a0ia0 + 0.5 * self.c2 * a0ia2;
-        let wt2 = (1. / 6.)
-            * (4. * self.c0.powi(2) * a0ia0
-                + (1. + 4. * self.c0 * self.c2) * a0ia2
-                + 4. * self.c2.powi(2) * a2ia2);
-        let wt3 = 0.5 * self.c0 * a0ia2 + self.c2 * a2ia2;
+        let wt1 = 0.5 * a0ia1;
+        let wt2 = (1. / 6.) * (a0ia2 + 4. * a1ia1);
+        let wt3 = 0.5 * a1ia2;
         let wt4 = a2ia2;
 
         HermiteQuintic {
@@ -197,7 +167,7 @@ impl HelicalPHQuinticCurve {
 }
 
 pub struct EulerRodriguesFrame {
-    data: HelicalPHQuinticCurve,
+    data: QuinticPHCurve,
     curve: HermiteQuintic,
 }
 
@@ -214,7 +184,7 @@ impl Curve for EulerRodriguesFrame {
 impl Frame for EulerRodriguesFrame {
     fn frame(&self, u: f32) -> Affine3A {
         let a = self.data.a0 * (1. - u).powi(2)
-            + (self.data.a0 * self.data.c0 + self.data.a2 * self.data.c2) * u * (1. - u)
+            + self.data.a2 * u * (1. - u)
             + self.data.a2 * u.powi(2);
 
         let ai = (a * Quat::from_xyzw(1., 0., 0., 0.) * a.conjugate()).xyz() / a.length_squared();
@@ -241,7 +211,7 @@ impl Spline<EulerRodriguesFrame> {
                 .map(|(p0, p1, p2)| (p1, 0.25 * ((n - 2) as f32) * (p2 - p0)))
                 .tuple_windows()
                 .map(|((p0, d0), (p1, d1))| {
-                    HelicalPHQuinticCurve::new(p0, p1, d0, d1).euler_rodrigues_frame()
+                    QuinticPHCurve::new(p0, p1, d0, d1).euler_rodrigues_frame()
                 })
                 .collect(),
         }
