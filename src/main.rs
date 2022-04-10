@@ -34,18 +34,6 @@ fn draw_spline(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let spline =
-        coasters::curve::Spline::<coasters::curve::EulerRodriguesFrame>::catmull_rom(vec![
-            const_vec3!([6., 12., 1.]),
-            const_vec3!([0., 8., 2.]),
-            const_vec3!([3., 4., 7.]),
-            const_vec3!([6., 0., 4.]),
-            const_vec3!([8., 4., 5.]),
-            const_vec3!([12., 2., 6.]),
-            const_vec3!([11., 10., 7.]),
-            const_vec3!([11., 19., 8.]),
-        ]);
-
     // const P0: Vec3 = const_vec3!([6., 12., 0.]);
     // const P1: Vec3 = const_vec3!([0., 8., 1.]);
     // const P2: Vec3 = const_vec3!([3., 4., 5.]);
@@ -59,12 +47,25 @@ fn draw_spline(
     const D0: Vec3 = const_vec3!([8., 0., 8.]);
     const D1: Vec3 = const_vec3!([0., 8., 8.]);
 
+    let ds = 0.1;
+
     let start = bevy::utils::Instant::now();
+    let spline =
+        coasters::curve::Spline::<coasters::curve::EulerRodriguesFrame>::catmull_rom(vec![
+            const_vec3!([6., 12., 1.]),
+            const_vec3!([0., 8., 2.]),
+            const_vec3!([3., 4., 7.]),
+            const_vec3!([6., 0., 4.]),
+            const_vec3!([8., 4., 5.]),
+            const_vec3!([12., 2., 6.]),
+            const_vec3!([11., 10., 7.]),
+            const_vec3!([11., 19., 8.]),
+        ]);
     let duration = start.elapsed();
     println!("{}", duration.as_micros());
 
     let m_start = bevy::utils::Instant::now();
-    let mesh = coasters::proc_mesh::ribbon(&spline, 0., 1., 0.1, 1.);
+    let mesh = coasters::proc_mesh::ribbon(&spline, 0., 1., ds, 1.);
     let m_duration = m_start.elapsed();
     println!("{}", m_duration.as_micros());
 
@@ -93,41 +94,12 @@ fn draw_spline(
         });
     }
 
-    // for (vert, normal) in positions.iter().zip(normals) {
-    //     commands.spawn_bundle(PbrBundle {
-    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
-    //             radius: 0.1,
-    //             ..Default::default()
-    //         })),
-    //         material: materials.add(Color::SILVER.into()),
-    //         transform: Transform::from_translation(Vec3::from(*vert) + Vec3::from(*normal)),
-    //         ..Default::default()
-    //     });
-    // }
-
-    // for p in [P0 - D0, P0, P1, P1 + D1] {
-    //     commands.spawn_bundle(PbrBundle {
-    //         mesh: meshes.add(Mesh::from(shape::Icosphere {
-    //             radius: 0.3,
-    //             ..Default::default()
-    //         })),
-    //         material: materials.add(Color::SILVER.into()),
-    //         transform: Transform::from_translation(p),
-    //         ..Default::default()
-    //     });
-    // }
-
-    // commands.spawn_bundle(PbrBundle {
-    //     mesh: meshes.add(mesh),
-    //     material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
-    //     ..Default::default()
-    // });
-
-    for position in spline
-        .resample(0., 1., 0.1)
+    for frame in spline
+        .resample(0., 1., ds)
         .into_iter()
-        .map(|u| spline.frame(u).translation)
+        .map(|u| spline.frame(u))
     {
+        let position = frame.translation;
         commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
                 radius: 0.1,
@@ -138,6 +110,24 @@ fn draw_spline(
             ..Default::default()
         });
     }
+
+    for (vert, normal) in positions.iter().zip(normals) {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.1,
+                ..Default::default()
+            })),
+            material: materials.add(Color::SILVER.into()),
+            transform: Transform::from_translation(Vec3::from(*vert) + Vec3::from(*normal)),
+            ..Default::default()
+        });
+    }
+
+    // commands.spawn_bundle(PbrBundle {
+    //     mesh: meshes.add(mesh),
+    //     material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
+    //     ..Default::default()
+    // });
 }
 
 fn setup(

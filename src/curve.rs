@@ -167,7 +167,7 @@ impl Curve for EulerRodriguesFrame {
 impl Frame for EulerRodriguesFrame {
     fn frame(&self, u: f32) -> Affine3A {
         let a = self.data.a0 * (1. - u).powi(2)
-            + self.data.a2 * u * (1. - u)
+            + self.data.a1 * u * (1. - u) * 2.
             + self.data.a2 * u.powi(2);
 
         let ai = (a * Quat::from_xyzw(1., 0., 0., 0.) * a.conjugate()).xyz() / a.length_squared();
