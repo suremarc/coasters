@@ -31,26 +31,15 @@ pub fn ribbon<T: Frame + Resample>(
         normals.push(n.to_array());
     }
 
-    // println!("{:#?}", verts);
-
     let mut indices = (0..verts.len() as u32).collect::<Vec<_>>();
     let mut reversed: Vec<_> = indices.clone().into_iter().rev().skip(1).collect();
     indices.append(&mut reversed);
 
-    // println!("{:#?}", indices);
-
     let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleStrip);
-    mesh.set_attribute(
-        Mesh::ATTRIBUTE_COLOR,
-        verts
-            .iter()
-            .map(|_| [0.0, 0.0, 0.0, 1.0])
-            .collect::<Vec<[f32; 4]>>(),
-    );
 
+    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
     mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, verts);
     mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
     mesh
 }

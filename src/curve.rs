@@ -199,6 +199,18 @@ impl Spline<EulerRodriguesFrame> {
                 .collect(),
         }
     }
+
+    pub fn hermite(data: Vec<[Vec3; 2]>) -> Self {
+        Self {
+            segments: data
+                .into_iter()
+                .tuple_windows()
+                .map(|([p0, d0], [p1, d1])| {
+                    QuinticPHCurve::new(p0, p1, d0, d1).euler_rodrigues_frame()
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

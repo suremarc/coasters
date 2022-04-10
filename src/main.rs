@@ -29,43 +29,39 @@ fn as_float3(vals: &bevy::render::mesh::VertexAttributeValues) -> Option<&[[f32;
     }
 }
 
+fn as_float2(vals: &bevy::render::mesh::VertexAttributeValues) -> Option<&[[f32; 2]]> {
+    match vals {
+        bevy::render::mesh::VertexAttributeValues::Float32x2(values) => Some(values),
+        _ => None,
+    }
+}
+
 fn draw_spline(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // const P0: Vec3 = const_vec3!([6., 12., 0.]);
-    // const P1: Vec3 = const_vec3!([0., 8., 1.]);
-    // const P2: Vec3 = const_vec3!([3., 4., 5.]);
-    // const P3: Vec3 = const_vec3!([6., 0., 10.]);
-
-    // let spline = coasters::curve::HermiteQuintic::new(P1, P2, 0.25 * (P2 - P0), 0.25 * (P3 - P1));
-    // let spline = coasters::curve::HelicalPHQuinticCurve::new(P0, P1, D0, D1);
-
-    const P0: Vec3 = const_vec3!([0., 0., 0.]);
-    const P1: Vec3 = const_vec3!([8., 8., 8.]);
-    const D0: Vec3 = const_vec3!([8., 0., 8.]);
-    const D1: Vec3 = const_vec3!([0., 8., 8.]);
+    let pts = vec![
+        const_vec3!([6., 12., 1.]),
+        const_vec3!([0., 8., 2.]),
+        const_vec3!([3., 4., 7.]),
+        const_vec3!([6., 0., 4.]),
+        const_vec3!([8., 4., 5.]),
+        const_vec3!([12., 2., 6.]),
+        const_vec3!([11., 10., 7.]),
+        const_vec3!([11., 19., 8.]),
+    ];
 
     let ds = 0.1;
 
     let start = bevy::utils::Instant::now();
     let spline =
-        coasters::curve::Spline::<coasters::curve::EulerRodriguesFrame>::catmull_rom(vec![
-            const_vec3!([6., 12., 1.]),
-            const_vec3!([0., 8., 2.]),
-            const_vec3!([3., 4., 7.]),
-            const_vec3!([6., 0., 4.]),
-            const_vec3!([8., 4., 5.]),
-            const_vec3!([12., 2., 6.]),
-            const_vec3!([11., 10., 7.]),
-            const_vec3!([11., 19., 8.]),
-        ]);
+        coasters::curve::Spline::<coasters::curve::EulerRodriguesFrame>::catmull_rom(pts.clone());
     let duration = start.elapsed();
     println!("{}", duration.as_micros());
 
     let m_start = bevy::utils::Instant::now();
-    let mesh = coasters::proc_mesh::ribbon(&spline, 0., 1., ds, 1.);
+    let mesh = coasters::proc_mesh::ribbon(&spline, 0., 1., ds, 2.);
     let m_duration = m_start.elapsed();
     println!("{}", m_duration.as_micros());
 
@@ -74,13 +70,6 @@ fn draw_spline(
         .map(as_float3)
         .unwrap()
         .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
-    // println!("{:#?}", positions);
-
-    let normals = mesh
-        .attribute(Mesh::ATTRIBUTE_NORMAL)
-        .map(as_float3)
-        .unwrap()
-        .expect("`Mesh::ATTRIBUTE_NORMAL` vertex attributes should be of type `float3`");
 
     for vert in positions {
         commands.spawn_bundle(PbrBundle {
@@ -90,6 +79,18 @@ fn draw_spline(
             })),
             material: materials.add(Color::GOLD.into()),
             transform: Transform::from_translation(Vec3::from(*vert)),
+            ..Default::default()
+        });
+    }
+
+    for &pt in pts.iter() {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.3,
+                ..Default::default()
+            })),
+            material: materials.add(Color::RED.into()),
+            transform: Transform::from_translation(pt),
             ..Default::default()
         });
     }
@@ -111,23 +112,11 @@ fn draw_spline(
         });
     }
 
-    for (vert, normal) in positions.iter().zip(normals) {
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Icosphere {
-                radius: 0.1,
-                ..Default::default()
-            })),
-            material: materials.add(Color::SILVER.into()),
-            transform: Transform::from_translation(Vec3::from(*vert) + Vec3::from(*normal)),
-            ..Default::default()
-        });
-    }
-
-    // commands.spawn_bundle(PbrBundle {
-    //     mesh: meshes.add(mesh),
-    //     material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
-    //     ..Default::default()
-    // });
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(mesh),
+        material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
+        ..Default::default()
+    });
 }
 
 fn setup(
