@@ -59,6 +59,57 @@ impl<T: GenericCurve> Resample for T {
     }
 }
 
+pub trait SplineSegment {
+    fn p(&self, u: f32) -> Vec3;
+    fn speed(&self, u: f32) -> f32;
+}
+
+pub struct Spline<T: SplineSegment> {
+    segments: Vec<T>,
+}
+
+impl<T: SplineSegment> Spline<T> {
+    fn normalize(&self, mut u: f32) -> (f32, usize) {
+        u *= self.segments.len() as f32;
+        let i = u.floor().clamp(0., self.segments.len() as f32 - 1.);
+
+        (u - i, i as usize)
+    }
+
+    fn p(&self, u: f32) -> Vec3 {
+        let (u, i) = self.normalize(u);
+        self.segments[i].p(u)
+    }
+
+    fn speed(&self, u: f32) -> f32 {
+        let (u, i) = self.normalize(u);
+        self.segments[i].speed(u)
+    }
+}
+
+impl<T: SplineSegment> Frame for Spline<T>
+where
+    T: Frame,
+{
+    fn frame(&self, u: f32) -> Affine3A {
+        let (u, i) = self.normalize(u);
+        self.segments[i].frame(u)
+    }
+}
+
+impl<T: SplineSegment> Resample for Spline<T> {
+    fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
+        let mut u = u_start;
+        let mut us = Vec::<f32>::new();
+        while u < u_stop {
+            us.push(u);
+            u += ds / self.speed(u);
+        }
+
+        us
+    }
+}
+
 const fn catmull_rom_matrix(tau: f32) -> Mat4 {
     const_mat4!(
         // [0., -tau, 2. * tau, -tau],
@@ -79,50 +130,70 @@ pub struct CatmullRom3 {
     pub coefs: Vec<Mat4>,
 }
 
-impl CatmullRom3 {
-    pub fn new(pts: Vec<Vec3>) -> Self {
-        let coefs = pts
-            .iter()
-            .map(|pt| pt.extend(0.))
-            .tuple_windows()
-            .map(|(p0, p1, p2, p3)| {
-                Mat4::from_cols(p0, p1, p2, p3).mul_mat4(&catmull_rom_matrix(TAU))
-            })
-            .collect();
-
-        Self { pts, coefs }
-    }
-
-    fn normalize(&self, mut u: f32) -> (f32, usize) {
-        u *= self.coefs.len() as f32;
-        let i = u.floor().clamp(0., self.coefs.len() as f32 - 1.);
-
-        (u - i, i as usize)
-    }
+pub struct CatmullRom3Segment {
+    pub coefs: Mat4,
 }
 
-impl GenericCurve for CatmullRom3 {
+impl CatmullRom3Segment {
+    fn new(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3) -> CatmullRom3Segment {
+        let [p04, p14, p24, p34] = [p0.extend(0.), p1.extend(0.), p2.extend(0.), p3.extend(0.)];
+        CatmullRom3Segment {
+            coefs: Mat4::from_cols(p04, p14, p24, p34).mul_mat4(&catmull_rom_matrix(TAU)),
+        }
+    }
+
     fn p(&self, u: f32) -> Vec3 {
-        let (u, i) = self.normalize(u);
-        self.coefs[i]
+        self.coefs
             .mul_vec4(const_vec4!([1., u, u * u, u * u * u]))
             .truncate()
     }
 
     fn dp(&self, u: f32) -> Vec3 {
-        let (u, i) = self.normalize(u);
-        self.coefs[i]
+        self.coefs
             .mul_vec4(const_vec4!([0., 1., 2. * u, 3. * u * u]))
             .truncate()
-            * self.coefs.len() as f32
     }
 
     fn d2p(&self, u: f32) -> Vec3 {
-        let (u, i) = self.normalize(u);
-        self.coefs[i]
+        self.coefs
             .mul_vec4(const_vec4!([0., 0., 2., 6. * u]))
             .truncate()
-            * self.coefs.len().pow(2) as f32
+    }
+}
+
+impl GenericCurve for CatmullRom3Segment {
+    fn p(&self, u: f32) -> Vec3 {
+        self.p(u)
+    }
+
+    fn dp(&self, u: f32) -> Vec3 {
+        self.dp(u)
+    }
+
+    fn d2p(&self, u: f32) -> Vec3 {
+        self.d2p(u)
+    }
+}
+
+impl SplineSegment for CatmullRom3Segment {
+    fn p(&self, u: f32) -> Vec3 {
+        self.p(u)
+    }
+
+    fn speed(&self, u: f32) -> f32 {
+        self.dp(u).length()
+    }
+}
+
+impl Spline<CatmullRom3Segment> {
+    pub fn new(pts: Vec<Vec3>) -> Self {
+        let segments = pts
+            .into_iter()
+            .tuple_windows()
+            .map(|(p0, p1, p2, p3)| CatmullRom3Segment::new(p0, p1, p2, p3))
+            .collect();
+
+        Self { segments }
     }
 }
 
@@ -279,6 +350,16 @@ impl Frame for EulerRodriguesFrame {
     }
 }
 
+impl SplineSegment for EulerRodriguesFrame {
+    fn p(&self, u: f32) -> Vec3 {
+        self.curve.p(u)
+    }
+
+    fn speed(&self, u: f32) -> f32 {
+        self.curve.speed(u)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct HermiteQuintic {
     pi: Vec3,
@@ -335,57 +416,14 @@ impl Resample for HermiteQuintic {
     }
 }
 
-pub fn ribbon_mesh<T: Frame + Resample>(
-    curve: &T,
-    u_start: f32,
-    u_end: f32,
-    ds: f32,
-    width: f32,
-) -> Mesh {
-    let us = curve.resample(u_start, u_end, ds);
-
-    let mut verts: Vec<[f32; 3]> = Vec::with_capacity(us.len() * 2);
-    let mut normals = verts.clone();
-    let uvs: Vec<[f32; 2]> = (0..verts.capacity())
-        .map(|i| [(i % 2) as f32, ((i / 2) % 2) as f32])
-        .collect();
-
-    let w2 = width / 2.;
-
-    for frame in us.into_iter().map(|u| curve.frame(u)) {
-        let p = frame.translation;
-        let x = frame.z_axis;
-        let n = frame.y_axis;
-
-        verts.push((p - w2 * x).to_array());
-        verts.push((p + w2 * x).to_array());
-
-        normals.push(n.to_array());
-        normals.push(n.to_array());
+impl SplineSegment for HermiteQuintic {
+    fn p(&self, u: f32) -> Vec3 {
+        self.p(u)
     }
 
-    // println!("{:#?}", verts);
-
-    let mut indices = (0..verts.len() as u32).collect::<Vec<_>>();
-    let mut reversed: Vec<_> = indices.clone().into_iter().rev().skip(1).collect();
-    indices.append(&mut reversed);
-
-    // println!("{:#?}", indices);
-
-    let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleStrip);
-    mesh.set_attribute(
-        Mesh::ATTRIBUTE_COLOR,
-        verts
-            .iter()
-            .map(|_| [0.0, 0.0, 0.0, 1.0])
-            .collect::<Vec<[f32; 4]>>(),
-    );
-
-    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, verts);
-    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
-    mesh
+    fn speed(&self, u: f32) -> f32 {
+        self.speed(u)
+    }
 }
 
 // Generates the basis for the one-parameter family of solutions to AiA* = c.

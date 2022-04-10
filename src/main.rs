@@ -1,14 +1,14 @@
 use bevy::{math::const_vec3, prelude::*};
 use bevy_flycam::PlayerPlugin;
-use coasters::curve::{Frame, GenericCurve, Resample};
+use coasters::curve::{Frame, Resample};
 
 fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
         .insert_resource(WindowDescriptor {
             title: "Coasters!".to_string(),
-            width: 1200.,
-            height: 1200.,
+            width: 1280.,
+            height: 720.,
             ..Default::default()
         })
         // .insert_resource(WgpuOptions {
@@ -66,7 +66,7 @@ fn draw_spline(
     let frame = spline.euler_rodrigues_frame();
 
     let m_start = bevy::utils::Instant::now();
-    let mesh = coasters::curve::ribbon_mesh(&frame, 0., 1., 0.1, 1.);
+    let mesh = coasters::proc_mesh::ribbon(&frame, 0., 1., 0.1, 1.);
     let m_duration = m_start.elapsed();
     println!("{}", m_duration.as_micros());
 
