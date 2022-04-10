@@ -1,9 +1,14 @@
 use std::ops::{Add, Mul};
 
 use bevy::math::*;
-use bevy::prelude::{Mesh, Vec3};
+use bevy::prelude::Vec3;
 
 use itertools::Itertools;
+
+pub trait Curve {
+    fn p(&self, u: f32) -> Vec3;
+    fn speed(&self, u: f32) -> f32;
+}
 
 pub trait Frame {
     fn frame(&self, u: f32) -> Affine3A;
@@ -13,69 +18,20 @@ pub trait Resample {
     fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32>;
 }
 
-pub trait GenericCurve {
-    fn p(&self, u: f32) -> Vec3;
-    fn dp(&self, u: f32) -> Vec3;
-    fn d2p(&self, u: f32) -> Vec3;
-
-    fn tangent(&self, u: f32) -> Vec3 {
-        self.dp(u).normalize()
-    }
-
-    fn normal(&self, u: f32) -> Vec3 {
-        let dpdu = self.dp(u);
-        let d2pdu2 = self.d2p(u);
-
-        dpdu.cross(d2pdu2.cross(dpdu)).normalize()
-    }
-
-    fn binormal(&self, u: f32) -> Vec3 {
-        self.dp(u).cross(self.d2p(u)).normalize()
-    }
-}
-
-impl<T: GenericCurve> Frame for T {
-    fn frame(&self, u: f32) -> Affine3A {
-        Affine3A::from_mat3_translation(
-            Mat3::from_cols(self.binormal(u), self.normal(u), self.tangent(u)),
-            self.p(u),
-        )
-    }
-}
-
-impl<T: GenericCurve> Resample for T {
-    fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
-        let mut u = u_start;
-        let mut us = Vec::<f32>::new();
-        while u < u_stop {
-            us.push(u);
-            let dpdu = self.dp(u);
-            // let d2pdu2 = self.d2p(u);
-            // u += ds * dpdu.length_recip() - ds * ds / 4. * dpdu.dot(d2pdu2) / dpdu.length_squared();
-            u += ds * dpdu.length_recip();
-        }
-
-        us
-    }
-}
-
-pub trait SplineSegment {
-    fn p(&self, u: f32) -> Vec3;
-    fn speed(&self, u: f32) -> f32;
-}
-
-pub struct Spline<T: SplineSegment> {
+pub struct Spline<T: Curve> {
     segments: Vec<T>,
 }
 
-impl<T: SplineSegment> Spline<T> {
+impl<T: Curve> Spline<T> {
     fn normalize(&self, mut u: f32) -> (f32, usize) {
         u *= self.segments.len() as f32;
         let i = u.floor().clamp(0., self.segments.len() as f32 - 1.);
 
         (u - i, i as usize)
     }
+}
 
+impl<T: Curve> Curve for Spline<T> {
     fn p(&self, u: f32) -> Vec3 {
         let (u, i) = self.normalize(u);
         self.segments[i].p(u)
@@ -87,7 +43,7 @@ impl<T: SplineSegment> Spline<T> {
     }
 }
 
-impl<T: SplineSegment> Frame for Spline<T>
+impl<T: Curve> Frame for Spline<T>
 where
     T: Frame,
 {
@@ -97,7 +53,7 @@ where
     }
 }
 
-impl<T: SplineSegment> Resample for Spline<T> {
+impl<T: Curve> Resample for Spline<T> {
     fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
         let mut u = u_start;
         let mut us = Vec::<f32>::new();
@@ -110,95 +66,8 @@ impl<T: SplineSegment> Resample for Spline<T> {
     }
 }
 
-const fn catmull_rom_matrix(tau: f32) -> Mat4 {
-    const_mat4!(
-        // [0., -tau, 2. * tau, -tau],
-        // [1., 0., tau - 3., 2. - tau],
-        // [0., tau, 3. - 2. * tau, tau - 2.],
-        // [0., 0., -tau, tau]
-        [0., 1., 0., 0.],
-        [-tau, 0., tau, 0.],
-        [2. * tau, tau - 3., 3. - 2. * tau, -tau],
-        [-tau, 2. - tau, tau - 2., tau]
-    )
-}
-
-const TAU: f32 = 0.5;
-
-pub struct CatmullRom3 {
-    pub pts: Vec<Vec3>,
-    pub coefs: Vec<Mat4>,
-}
-
-pub struct CatmullRom3Segment {
-    pub coefs: Mat4,
-}
-
-impl CatmullRom3Segment {
-    fn new(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3) -> CatmullRom3Segment {
-        let [p04, p14, p24, p34] = [p0.extend(0.), p1.extend(0.), p2.extend(0.), p3.extend(0.)];
-        CatmullRom3Segment {
-            coefs: Mat4::from_cols(p04, p14, p24, p34).mul_mat4(&catmull_rom_matrix(TAU)),
-        }
-    }
-
-    fn p(&self, u: f32) -> Vec3 {
-        self.coefs
-            .mul_vec4(const_vec4!([1., u, u * u, u * u * u]))
-            .truncate()
-    }
-
-    fn dp(&self, u: f32) -> Vec3 {
-        self.coefs
-            .mul_vec4(const_vec4!([0., 1., 2. * u, 3. * u * u]))
-            .truncate()
-    }
-
-    fn d2p(&self, u: f32) -> Vec3 {
-        self.coefs
-            .mul_vec4(const_vec4!([0., 0., 2., 6. * u]))
-            .truncate()
-    }
-}
-
-impl GenericCurve for CatmullRom3Segment {
-    fn p(&self, u: f32) -> Vec3 {
-        self.p(u)
-    }
-
-    fn dp(&self, u: f32) -> Vec3 {
-        self.dp(u)
-    }
-
-    fn d2p(&self, u: f32) -> Vec3 {
-        self.d2p(u)
-    }
-}
-
-impl SplineSegment for CatmullRom3Segment {
-    fn p(&self, u: f32) -> Vec3 {
-        self.p(u)
-    }
-
-    fn speed(&self, u: f32) -> f32 {
-        self.dp(u).length()
-    }
-}
-
-impl Spline<CatmullRom3Segment> {
-    pub fn new(pts: Vec<Vec3>) -> Self {
-        let segments = pts
-            .into_iter()
-            .tuple_windows()
-            .map(|(p0, p1, p2, p3)| CatmullRom3Segment::new(p0, p1, p2, p3))
-            .collect();
-
-        Self { segments }
-    }
-}
-
 #[derive(Copy, Clone, Debug)]
-pub struct HelicalPHQuinticSplineSegment {
+pub struct HelicalPHQuinticCurve {
     c0: f32,
     c2: f32,
     a0: Quat,
@@ -207,8 +76,8 @@ pub struct HelicalPHQuinticSplineSegment {
     pf: Vec3,
 }
 
-impl HelicalPHQuinticSplineSegment {
-    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HelicalPHQuinticSplineSegment {
+impl HelicalPHQuinticCurve {
+    pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> HelicalPHQuinticCurve {
         let (u, v) = quat_cross_term_basis(di, df);
         let h = 120. * (pf - pi) - 15. * (di + df);
 
@@ -269,7 +138,7 @@ impl HelicalPHQuinticSplineSegment {
 
                 ((c0, c2), (a0, a2))
             })
-            .map(|((c0, c2), (a0, a2))| HelicalPHQuinticSplineSegment {
+            .map(|((c0, c2), (a0, a2))| HelicalPHQuinticCurve {
                 c0,
                 c2,
                 a0,
@@ -326,14 +195,8 @@ impl HelicalPHQuinticSplineSegment {
 }
 
 pub struct EulerRodriguesFrame {
-    data: HelicalPHQuinticSplineSegment,
+    data: HelicalPHQuinticCurve,
     curve: HermiteQuintic,
-}
-
-impl Resample for EulerRodriguesFrame {
-    fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
-        self.curve.resample(u_start, u_stop, ds)
-    }
 }
 
 impl Frame for EulerRodriguesFrame {
@@ -350,13 +213,19 @@ impl Frame for EulerRodriguesFrame {
     }
 }
 
-impl SplineSegment for EulerRodriguesFrame {
+impl Curve for EulerRodriguesFrame {
     fn p(&self, u: f32) -> Vec3 {
         self.curve.p(u)
     }
 
     fn speed(&self, u: f32) -> f32 {
         self.curve.speed(u)
+    }
+}
+
+impl Resample for EulerRodriguesFrame {
+    fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
+        self.curve.resample(u_start, u_stop, ds)
     }
 }
 
@@ -403,6 +272,16 @@ impl HermiteQuintic {
     }
 }
 
+impl Curve for HermiteQuintic {
+    fn p(&self, u: f32) -> Vec3 {
+        self.p(u)
+    }
+
+    fn speed(&self, u: f32) -> f32 {
+        self.speed(u)
+    }
+}
+
 impl Resample for HermiteQuintic {
     fn resample(&self, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
         let mut u = u_start;
@@ -413,16 +292,6 @@ impl Resample for HermiteQuintic {
         }
 
         us
-    }
-}
-
-impl SplineSegment for HermiteQuintic {
-    fn p(&self, u: f32) -> Vec3 {
-        self.p(u)
-    }
-
-    fn speed(&self, u: f32) -> f32 {
-        self.speed(u)
     }
 }
 

@@ -58,7 +58,7 @@ fn draw_spline(
     const D1: Vec3 = const_vec3!([0., 8., 8.]);
 
     let start = bevy::utils::Instant::now();
-    let spline = coasters::curve::HelicalPHQuinticSplineSegment::new(P0, P1, D0, D1);
+    let spline = coasters::curve::HelicalPHQuinticCurve::new(P0, P1, D0, D1);
     let curve = spline.curve();
     let duration = start.elapsed();
     println!("{}", duration.as_micros());
