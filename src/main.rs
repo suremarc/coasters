@@ -34,16 +34,17 @@ fn draw_spline(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // let spline = coasters::curve::CatmullRom3::new(vec![
-    //     const_vec3!([6., 12., 0.]),
-    //     const_vec3!([0., 8., 0.]),
-    //     const_vec3!([3., 4., 0.]),
-    //     const_vec3!([6., 0., 0.]),
-    //     const_vec3!([8., 4., 0.]),
-    //     const_vec3!([12., 2., 0.]),
-    //     const_vec3!([11., 10., 0.]),
-    //     const_vec3!([11., 19., 0.]),
-    // ]);
+    let spline =
+        coasters::curve::Spline::<coasters::curve::EulerRodriguesFrame>::catmull_rom(vec![
+            const_vec3!([6., 12., 1.]),
+            const_vec3!([0., 8., 2.]),
+            const_vec3!([3., 4., 7.]),
+            const_vec3!([6., 0., 4.]),
+            const_vec3!([8., 4., 5.]),
+            const_vec3!([12., 2., 6.]),
+            const_vec3!([11., 10., 7.]),
+            const_vec3!([11., 19., 8.]),
+        ]);
 
     // const P0: Vec3 = const_vec3!([6., 12., 0.]);
     // const P1: Vec3 = const_vec3!([0., 8., 1.]);
@@ -51,6 +52,7 @@ fn draw_spline(
     // const P3: Vec3 = const_vec3!([6., 0., 10.]);
 
     // let spline = coasters::curve::HermiteQuintic::new(P1, P2, 0.25 * (P2 - P0), 0.25 * (P3 - P1));
+    // let spline = coasters::curve::HelicalPHQuinticCurve::new(P0, P1, D0, D1);
 
     const P0: Vec3 = const_vec3!([0., 0., 0.]);
     const P1: Vec3 = const_vec3!([8., 8., 8.]);
@@ -58,15 +60,11 @@ fn draw_spline(
     const D1: Vec3 = const_vec3!([0., 8., 8.]);
 
     let start = bevy::utils::Instant::now();
-    let spline = coasters::curve::HelicalPHQuinticCurve::new(P0, P1, D0, D1);
-    let curve = spline.curve();
     let duration = start.elapsed();
     println!("{}", duration.as_micros());
 
-    let frame = spline.euler_rodrigues_frame();
-
     let m_start = bevy::utils::Instant::now();
-    let mesh = coasters::proc_mesh::ribbon(&frame, 0., 1., 0.1, 1.);
+    let mesh = coasters::proc_mesh::ribbon(&spline, 0., 1., 0.1, 1.);
     let m_duration = m_start.elapsed();
     println!("{}", m_duration.as_micros());
 
@@ -125,10 +123,10 @@ fn draw_spline(
     //     ..Default::default()
     // });
 
-    for position in curve
+    for position in spline
         .resample(0., 1., 0.1)
         .into_iter()
-        .map(|u| frame.frame(u).translation)
+        .map(|u| spline.frame(u).translation)
     {
         commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
