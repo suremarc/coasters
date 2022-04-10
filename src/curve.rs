@@ -78,7 +78,6 @@ impl QuinticPHCurve {
     pub fn new(pi: Vec3, pf: Vec3, di: Vec3, df: Vec3) -> QuinticPHCurve {
         let dp = pf - pi;
         let (q, _) = inverse_solve_quat(di + df);
-        // dbg!(q.length());
         let q_normalized = q.normalize();
         let q_normalized_inv = q_normalized.conjugate();
         let (tdi, tdf) = (q_normalized_inv.mul_vec3(di), q_normalized_inv.mul_vec3(df));
@@ -98,26 +97,10 @@ impl QuinticPHCurve {
                         * 0.25
                         * (0.5 * (1. + l) * c.length()).sqrt();
 
-                let sum = ta0 * 3. + ta1 * 4. + ta2 * 3.;
-                let ta0ia2 = (ta0 * I * ta2.conjugate() + ta2 * I * ta0.conjugate()).xyz();
-                dbg!(
-                    (sum * I * sum.conjugate()).xyz() - 120. * q_normalized_inv.mul_vec3(dp)
-                        + 15. * (tdi + tdf)
-                        - 5. * ta0ia2
-                );
-
                 (ta0, ta1, ta2)
             })
             .map(|(ta0, ta1, ta2)| (q_normalized * ta0, q_normalized * ta1, q_normalized * ta2))
-            .map(|(a0, a1, a2)| {
-                const I: Quat = const_quat!([1., 0., 0., 0.]);
-
-                let sum = a0 * 3. + a1 * 4. + a2 * 3.;
-                let a0ia2 = (a0 * I * a2.conjugate() + a2 * I * a0.conjugate()).xyz();
-                dbg!((sum * I * sum.conjugate()).xyz() - 120. * dp + 15. * (di + df) - 5. * a0ia2);
-
-                QuinticPHCurve { a0, a1, a2, pi }
-            })
+            .map(|(a0, a1, a2)| QuinticPHCurve { a0, a1, a2, pi })
             .min_by_key(|h| ordered_float::OrderedFloat(h.curve().elastic_bending_energy()))
             .unwrap()
     }
@@ -293,30 +276,6 @@ fn inverse_solve_quat(c: Vec3) -> (Quat, Quat) {
     (
         quat(1., mu / (1. + lambda), nu / (1. + lambda), 0.) * r,
         quat(0., nu / (1. + lambda), -mu / (1. + lambda), -1.) * r,
-    )
-}
-
-fn quat_cross_term_basis(c0: Vec3, c1: Vec3) -> (Vec3, Vec3) {
-    let [l0, mu0, nu0] = c0.normalize().to_array();
-    let [l1, mu1, nu1] = c1.normalize().to_array();
-
-    let (l0p, l1p) = (1. + l0, 1. + l1);
-    let r = (l0p * l1p).sqrt();
-    let s = (c0.length() * c1.length()).sqrt();
-
-    (
-        vec3(
-            l1p * l0p - (mu0 * mu1 + nu0 * nu1),
-            l1p * mu0 + l0p * mu1,
-            l1p * nu0 + l0p * nu1,
-        ) / r
-            * s,
-        vec3(
-            mu1 * nu0 - mu0 * nu1,
-            l0p * nu1 - l1p * nu0,
-            l1p * mu0 - l0p * mu1,
-        ) / r
-            * s,
     )
 }
 
