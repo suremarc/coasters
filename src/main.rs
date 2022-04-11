@@ -22,20 +22,6 @@ fn main() {
         .run();
 }
 
-fn as_float3(vals: &bevy::render::mesh::VertexAttributeValues) -> Option<&[[f32; 3]]> {
-    match vals {
-        bevy::render::mesh::VertexAttributeValues::Float32x3(values) => Some(values),
-        _ => None,
-    }
-}
-
-fn as_float2(vals: &bevy::render::mesh::VertexAttributeValues) -> Option<&[[f32; 2]]> {
-    match vals {
-        bevy::render::mesh::VertexAttributeValues::Float32x2(values) => Some(values),
-        _ => None,
-    }
-}
-
 fn draw_spline(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -64,24 +50,6 @@ fn draw_spline(
     let mesh = coasters::proc_mesh::ribbon(&spline, 0., 1., ds, 2.);
     let m_duration = m_start.elapsed();
     println!("{}", m_duration.as_micros());
-
-    let positions = mesh
-        .attribute(Mesh::ATTRIBUTE_POSITION)
-        .map(as_float3)
-        .unwrap()
-        .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
-
-    for vert in positions {
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Icosphere {
-                radius: 0.1,
-                ..Default::default()
-            })),
-            material: materials.add(Color::GOLD.into()),
-            transform: Transform::from_translation(Vec3::from(*vert)),
-            ..Default::default()
-        });
-    }
 
     for &pt in pts.iter() {
         commands.spawn_bundle(PbrBundle {
@@ -128,12 +96,12 @@ fn setup(
     info!("Using 4x MSAA");
 
     // Plane
-    // commands.spawn_bundle(PbrBundle {
-    //     mesh: meshes.add(Mesh::from(shape::Plane { size: 8.0 })),
-    //     material: materials.add(Color::rgb(1., 0.9, 0.9).into()),
-    //     transform: Transform::from_translation(Vec3::new(4., 0., 4.)),
-    //     ..Default::default()
-    // });
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 8.0 })),
+        material: materials.add(Color::rgb(1., 0.9, 0.9).into()),
+        transform: Transform::from_translation(Vec3::new(4., -1., 4.)),
+        ..Default::default()
+    });
     // Camera
     commands.spawn_bundle(PerspectiveCameraBundle {
         transform: Transform::from_matrix(Mat4::from_rotation_translation(

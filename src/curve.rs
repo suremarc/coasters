@@ -191,7 +191,7 @@ impl Spline<EulerRodriguesFrame> {
             segments: pts
                 .into_iter()
                 .tuple_windows()
-                .map(|(p0, p1, p2)| (p1, 0.25 * ((n - 2) as f32) * (p2 - p0)))
+                .map(|(p0, p1, p2)| (p1, 0.125 * ((n - 2) as f32) * (p2 - p0)))
                 .tuple_windows()
                 .map(|((p0, d0), (p1, d1))| {
                     QuinticPHCurve::new(p0, p1, d0, d1).euler_rodrigues_frame()
