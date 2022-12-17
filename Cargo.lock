@@ -2391,9 +2391,9 @@ checksum = "74605f360ce573babfe43964cbe520294dcb081afbf8c108fc6e23036b4da2df"
 
 [[package]]
 name = "pythagorean-hodographs"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a5eb3bbc9329bc0d79a92b70230ad0fb1c91c46c204938578227d20a932031c"
+checksum = "1a4dea5283def6c260c867abda34cd6988220d01a25bea652cad9ff1ffccbccc"
 dependencies = [
  "glam",
  "itertools",

@@ -1,6 +1,6 @@
 use bevy::{math::vec3, prelude::*};
 use bevy_flycam::PlayerPlugin;
-use coasters::proc_mesh::resample;
+use coasters::proc_mesh::Resampler;
 use pythagorean_hodographs::{Frame, QuinticPHCurve, Spline};
 
 fn main() {
@@ -61,10 +61,7 @@ fn draw_spline(
         });
     }
 
-    for frame in resample(&spline, 0., 1., ds)
-        .into_iter()
-        .map(|u| spline.frame(u))
-    {
+    for frame in Resampler::new(&spline, 0., 1., ds).map(|u| spline.frame(u)) {
         let position = frame.translation;
         commands.spawn(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
