@@ -1,15 +1,20 @@
 use bevy::prelude::Mesh;
 
-use crate::curve::{Frame, Resample};
+use pythagorean_hodographs::{Curve, Frame};
 
-pub fn ribbon<T: Frame + Resample>(
-    curve: &T,
-    u_start: f32,
-    u_end: f32,
-    ds: f32,
-    width: f32,
-) -> Mesh {
-    let us = curve.resample(u_start, u_end, ds);
+pub fn resample(curve: &impl Curve, u_start: f32, u_stop: f32, ds: f32) -> Vec<f32> {
+    let mut u = u_start;
+    let mut us = Vec::<f32>::new();
+    while u < u_stop {
+        us.push(u);
+        u += ds / curve.speed(u);
+    }
+
+    us
+}
+
+pub fn ribbon(curve: &(impl Curve + Frame), u_start: f32, u_end: f32, ds: f32, width: f32) -> Mesh {
+    let us = resample(curve, u_start, u_end, ds);
 
     let mut verts: Vec<[f32; 3]> = Vec::with_capacity(us.len() * 2);
     let mut normals = verts.clone();
@@ -38,8 +43,8 @@ pub fn ribbon<T: Frame + Resample>(
     let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleStrip);
 
     mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
-    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, verts);
-    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, verts);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh
 }

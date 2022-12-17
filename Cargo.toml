@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = "*"
-itertools = "*"
-bevy_flycam = "*"
-roots = { git = "https://github.com/suremarc/roots" }
-ordered-float = "*"
+bevy = "0.9.1"
+bevy_flycam = "0.9.0"
+pythagorean-hodographs = "0.2.0"
+

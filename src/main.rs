@@ -1,22 +1,21 @@
-use bevy::{math::const_vec3, prelude::*};
+use bevy::{math::vec3, prelude::*};
 use bevy_flycam::PlayerPlugin;
-use coasters::curve::{Frame, Resample};
+use coasters::proc_mesh::resample;
+use pythagorean_hodographs::{Frame, QuinticPHCurve, Spline};
 
 fn main() {
     App::new()
-        .insert_resource(Msaa { samples: 4 })
-        .insert_resource(WindowDescriptor {
-            title: "Coasters!".to_string(),
-            width: 1280.,
-            height: 720.,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                title: "Coasters!".to_string(),
+                width: 1280.,
+                height: 720.,
+                ..Default::default()
+            },
             ..Default::default()
-        })
-        // .insert_resource(WgpuOptions {
-        //     features: WgpuFeatures::POLYGON_MODE_LINE,
-        //     ..Default::default()
-        // })
-        .add_plugins(DefaultPlugins)
+        }))
         .add_plugin(PlayerPlugin)
+        .insert_resource(Msaa { samples: 4 })
         .add_startup_system(setup)
         .add_startup_system(draw_spline)
         .run();
@@ -28,21 +27,20 @@ fn draw_spline(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let pts = vec![
-        const_vec3!([6., 12., 1.]),
-        const_vec3!([0., 8., 2.]),
-        const_vec3!([3., 4., 7.]),
-        const_vec3!([6., 0., 4.]),
-        const_vec3!([8., 4., 5.]),
-        const_vec3!([12., 2., 6.]),
-        const_vec3!([11., 10., 7.]),
-        const_vec3!([11., 19., 8.]),
+        vec3(6., 12., 1.),
+        vec3(0., 8., 2.),
+        vec3(3., 4., 7.),
+        vec3(6., 0., 4.),
+        vec3(8., 4., 5.),
+        vec3(12., 2., 6.),
+        vec3(11., 10., 7.),
+        vec3(11., 19., 8.),
     ];
 
     let ds = 0.1;
 
     let start = bevy::utils::Instant::now();
-    let spline =
-        coasters::curve::Spline::<coasters::curve::EulerRodriguesFrame>::catmull_rom(pts.clone());
+    let spline = Spline::<QuinticPHCurve>::catmull_rom(pts.clone());
     let duration = start.elapsed();
     println!("{}", duration.as_micros());
 
@@ -52,7 +50,7 @@ fn draw_spline(
     println!("{}", m_duration.as_micros());
 
     for &pt in pts.iter() {
-        commands.spawn_bundle(PbrBundle {
+        commands.spawn(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
                 radius: 0.3,
                 ..Default::default()
@@ -63,13 +61,12 @@ fn draw_spline(
         });
     }
 
-    for frame in spline
-        .resample(0., 1., ds)
+    for frame in resample(&spline, 0., 1., ds)
         .into_iter()
         .map(|u| spline.frame(u))
     {
         let position = frame.translation;
-        commands.spawn_bundle(PbrBundle {
+        commands.spawn(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Icosphere {
                 radius: 0.1,
                 ..Default::default()
@@ -80,7 +77,7 @@ fn draw_spline(
         });
     }
 
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(mesh),
         material: materials.add(Color::rgb(0.1, 0.4, 0.8).into()),
         ..Default::default()
@@ -96,14 +93,14 @@ fn setup(
     info!("Using 4x MSAA");
 
     // Plane
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size: 8.0 })),
         material: materials.add(Color::rgb(1., 0.9, 0.9).into()),
         transform: Transform::from_translation(Vec3::new(4., -1., 4.)),
         ..Default::default()
     });
     // Camera
-    commands.spawn_bundle(PerspectiveCameraBundle {
+    commands.spawn(Camera3dBundle {
         transform: Transform::from_matrix(Mat4::from_rotation_translation(
             Quat::from_xyzw(-0.3, -0.5, -0.3, 0.5).normalize(),
             Vec3::new(-7.0, 20.0, 4.0),
@@ -111,7 +108,7 @@ fn setup(
         ..Default::default()
     });
     // Light
-    commands.spawn_bundle(PointLightBundle {
+    commands.spawn(PointLightBundle {
         transform: Transform::from_translation(Vec3::new(4.0, 8.0, 4.0)),
         ..Default::default()
     });
