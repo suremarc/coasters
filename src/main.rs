@@ -40,7 +40,7 @@ fn draw_spline(
     let ds = 0.1;
 
     let start = bevy::utils::Instant::now();
-    let spline = Spline::<QuinticPHCurve>::catmull_rom(pts.clone());
+    let spline = Spline::<QuinticPHCurve>::catmull_rom(&pts);
     let duration = start.elapsed();
     println!("{}", duration.as_micros());
 

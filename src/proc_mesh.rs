@@ -1,15 +1,15 @@
 use bevy::prelude::Mesh;
 
-use pythagorean_hodographs::{Curve, Frame};
+use pythagorean_hodographs::{Curve3, Frame};
 
-pub struct Resampler<'a, T: Curve> {
+pub struct Resampler<'a, T: Curve3> {
     curve: &'a T,
     u: f32,
     ds: f32,
     limit: f32,
 }
 
-impl<'a, T: Curve> Iterator for Resampler<'a, T> {
+impl<'a, T: Curve3> Iterator for Resampler<'a, T> {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -23,7 +23,7 @@ impl<'a, T: Curve> Iterator for Resampler<'a, T> {
     }
 }
 
-impl<'a, T: Curve> Resampler<'a, T> {
+impl<'a, T: Curve3> Resampler<'a, T> {
     pub fn new(curve: &'a T, u_start: f32, u_stop: f32, ds: f32) -> Self {
         Resampler {
             curve,
@@ -34,7 +34,13 @@ impl<'a, T: Curve> Resampler<'a, T> {
     }
 }
 
-pub fn ribbon(curve: &(impl Curve + Frame), u_start: f32, u_end: f32, ds: f32, width: f32) -> Mesh {
+pub fn ribbon(
+    curve: &(impl Curve3 + Frame),
+    u_start: f32,
+    u_end: f32,
+    ds: f32,
+    width: f32,
+) -> Mesh {
     let estimated_capacity = curve.arc_length(1.0).ceil() as usize;
 
     let mut verts: Vec<[f32; 3]> = Vec::with_capacity(estimated_capacity * 2);
