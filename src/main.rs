@@ -1,5 +1,3 @@
-#![feature(trivial_bounds)]
-
 use std::ops::Mul;
 
 use bevy::{math::vec3, prelude::*, reflect::TypeUuid};
@@ -26,6 +24,7 @@ fn main() {
         .add_startup_system(setup)
         .add_startup_system(init_coasters)
         .add_system(on_coaster_update)
+        .add_system(bind_player_to_coaster)
         .add_system(advance_coaster_joint)
         .add_system(lock_camera_to_coaster_joint)
         .add_system(bevy::window::close_on_esc)
@@ -53,6 +52,28 @@ fn setup(
         transform: Transform::from_translation(Vec3::new(4.0, 8.0, 4.0)),
         ..Default::default()
     });
+
+    // Help
+    commands.spawn(
+        TextBundle::from_section(
+            "Press Enter to ride the coaster; press Q to unbind from the track.",
+            TextStyle {
+                font: default(),
+                font_size: 100.0,
+                color: Color::WHITE,
+            },
+        )
+        .with_text_alignment(TextAlignment::BOTTOM_RIGHT)
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            position: UiRect {
+                bottom: Val::Px(5.0),
+                right: Val::Px(15.0),
+                ..default()
+            },
+            ..default()
+        }),
+    );
 }
 
 #[derive(Deref, DerefMut, Component)]
@@ -77,8 +98,8 @@ struct CoasterJointState {
 }
 
 impl CoasterJointState {
-    const MU: f32 = 0.5; // rolling friction
-    const G: f32 = 10.0; // gravity
+    const MU: f32 = 0.0; // rolling friction
+    const G: f32 = 0.075; // gravity
 
     fn advance(&mut self, curve: &(impl Curve3 + ?Sized), dt: f32) {
         let dpdu = curve.dp(self.u);
@@ -119,20 +140,37 @@ fn on_coaster_update(
     for ev in ev_asset.iter() {
         if let AssetEvent::Created { handle } = ev {
             let coaster = assets.get(handle).expect("asset should be loaded");
-            let entity = draw_coaster(&mut commands, handle, coaster, &mut meshes, &mut materials);
+            let entity = spawn_coaster(&mut commands, handle, coaster, &mut meshes, &mut materials);
             // this is broken for now
-            // commands
-            //     .get_entity(cams.single_mut())
-            //     .unwrap()
-            //     .insert(CoasterJoint {
-            //         coaster: entity,
-            //         state: Default::default(),
-            //     });
         }
     }
 }
 
-fn draw_coaster(
+fn bind_player_to_coaster(
+    mut commands: Commands,
+    keys: Res<Input<KeyCode>>,
+    query_coasters: Query<(Entity, &BevySpline), With<Handle<Coaster>>>,
+    mut query_player: Query<(Entity, &mut Transform), With<FlyCam>>,
+) {
+    let (entity, mut transform) = query_player.single_mut();
+    if keys.just_pressed(KeyCode::Return) {
+        let (coaster_entity, spline) = query_coasters.single();
+
+        commands.get_entity(entity).unwrap().insert(CoasterJoint {
+            coaster: coaster_entity,
+            state: CoasterJointState { u: 0., dudt: 0.05 },
+        });
+        transform.rotation = spline.quat(0.);
+    } else if keys.just_pressed(KeyCode::Q) {
+        commands
+            .get_entity(entity)
+            .unwrap()
+            .remove::<CoasterJoint>();
+    }
+    // let coaster =
+}
+
+fn spawn_coaster(
     commands: &mut Commands,
     handle: &Handle<Coaster>,
     coaster: &Coaster,
@@ -209,7 +247,7 @@ fn lock_camera_to_coaster_joint(
     for (mut transform, joint) in query.iter_mut() {
         let coaster = coaster_query.get(joint.coaster).unwrap();
         let u = joint.state.u;
-        transform.translation = coaster.p(u);
-        transform.rotation = coaster.quat(u);
+        transform.as_mut().translation = coaster.p(u) + Vec3::from(coaster.frame(u).y_axis);
+        // transform.as_mut().rotation = coaster.quat(u);
     }
 }
