@@ -1,5 +1,7 @@
 #![feature(trivial_bounds)]
 
+use std::ops::Mul;
+
 use bevy::{math::vec3, prelude::*, reflect::TypeUuid};
 use bevy_flycam::{FlyCam, PlayerPlugin};
 use coasters::proc_mesh::Resampler;
@@ -24,25 +26,74 @@ fn main() {
         .add_startup_system(setup)
         .add_startup_system(init_coasters)
         .add_system(on_coaster_update)
+        .add_system(advance_coaster_joint)
+        .add_system(lock_camera_to_coaster_joint)
         .add_system(bevy::window::close_on_esc)
         .run();
 }
 
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    info!("Press 'm' to toggle MSAA");
+    info!("Using 4x MSAA");
+
+    // Plane
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 8.0 })),
+        material: materials.add(Color::rgb(1., 0.9, 0.9).into()),
+        transform: Transform::from_translation(Vec3::new(4., -1., 4.)),
+        ..Default::default()
+    });
+
+    // Light
+    commands.spawn(PointLightBundle {
+        transform: Transform::from_translation(Vec3::new(4.0, 8.0, 4.0)),
+        ..Default::default()
+    });
+}
+
 #[derive(Deref, DerefMut, Component)]
-pub struct BevySpline(Box<dyn Curve3 + Send + Sync + 'static>);
+struct BevySpline(Box<dyn Frame + Send + Sync + 'static>);
 
 #[derive(Debug, Deserialize, TypeUuid)]
 #[uuid = "db5ca089-b785-4dfc-a407-f9ff009e8715"]
-pub struct Coaster {
+struct Coaster {
     pts: Vec<Vec3>,
 }
 
-#[derive(Default, Component)]
+#[derive(Component)]
 struct CoasterJoint {
-    pub pos: f32,
+    pub coaster: Entity,
+    pub state: CoasterJointState,
 }
 
-pub fn init_coasters(mut coasters: ResMut<Assets<Coaster>>) {
+#[derive(Default)]
+struct CoasterJointState {
+    pub u: f32,
+    pub dudt: f32,
+}
+
+impl CoasterJointState {
+    const MU: f32 = 0.5; // rolling friction
+    const G: f32 = 10.0; // gravity
+
+    fn advance(&mut self, curve: &(impl Curve3 + ?Sized), dt: f32) {
+        let dpdu = curve.dp(self.u);
+        let d2pdu2 = curve.d2p(self.u);
+
+        let d2udt2 = -(Self::G * dpdu.y + Self::MU * Self::G * dpdu.mul(vec3(1., 0., 1.)).length())
+            * self.dudt
+            + dpdu.dot(d2pdu2) / dpdu.length_squared() * self.dudt.powi(2);
+
+        self.dudt += d2udt2 * dt;
+        self.u += self.dudt * dt;
+    }
+}
+
+fn init_coasters(mut coasters: ResMut<Assets<Coaster>>) {
     coasters.add(Coaster {
         pts: vec![
             vec3(6., 12., 1.),
@@ -57,17 +108,26 @@ pub fn init_coasters(mut coasters: ResMut<Assets<Coaster>>) {
     });
 }
 
-pub fn on_coaster_update(
+fn on_coaster_update(
     mut commands: Commands,
     mut ev_asset: EventReader<AssetEvent<Coaster>>,
     assets: Res<Assets<Coaster>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut cams: Query<Entity, With<FlyCam>>,
 ) {
     for ev in ev_asset.iter() {
         if let AssetEvent::Created { handle } = ev {
             let coaster = assets.get(handle).expect("asset should be loaded");
-            draw_coaster(&mut commands, handle, coaster, &mut meshes, &mut materials);
+            let entity = draw_coaster(&mut commands, handle, coaster, &mut meshes, &mut materials);
+            // this is broken for now
+            // commands
+            //     .get_entity(cams.single_mut())
+            //     .unwrap()
+            //     .insert(CoasterJoint {
+            //         coaster: entity,
+            //         state: Default::default(),
+            //     });
         }
     }
 }
@@ -78,7 +138,7 @@ fn draw_coaster(
     coaster: &Coaster,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-) {
+) -> Entity {
     let ds = 0.1;
 
     let start = bevy::utils::Instant::now();
@@ -126,28 +186,30 @@ fn draw_coaster(
                     ..Default::default()
                 });
             }
-        });
+        })
+        .id()
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+fn advance_coaster_joint(
+    time: Res<Time>,
+    mut query: Query<&mut CoasterJoint>,
+    coaster_query: Query<&BevySpline>,
 ) {
-    info!("Press 'm' to toggle MSAA");
-    info!("Using 4x MSAA");
+    let dt = time.delta_seconds();
+    for mut joint in query.iter_mut() {
+        let coaster = coaster_query.get(joint.coaster).unwrap();
+        joint.as_mut().state.advance(coaster.0.as_ref(), dt);
+    }
+}
 
-    // Plane
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 8.0 })),
-        material: materials.add(Color::rgb(1., 0.9, 0.9).into()),
-        transform: Transform::from_translation(Vec3::new(4., -1., 4.)),
-        ..Default::default()
-    });
-
-    // Light
-    commands.spawn(PointLightBundle {
-        transform: Transform::from_translation(Vec3::new(4.0, 8.0, 4.0)),
-        ..Default::default()
-    });
+fn lock_camera_to_coaster_joint(
+    mut query: Query<(&mut Transform, &CoasterJoint)>,
+    coaster_query: Query<&BevySpline>,
+) {
+    for (mut transform, joint) in query.iter_mut() {
+        let coaster = coaster_query.get(joint.coaster).unwrap();
+        let u = joint.state.u;
+        transform.translation = coaster.p(u);
+        transform.rotation = coaster.quat(u);
+    }
 }
