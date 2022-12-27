@@ -983,7 +983,9 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_flycam",
+ "iyes_loopless",
  "pythagorean-hodographs",
+ "serde",
 ]
 
 [[package]]
@@ -1751,6 +1753,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4217ad341ebadf8d8e724e264f13e593e0648f5b3e94b3896a5df283be015ecc"
 
 [[package]]
+name = "iyes_loopless"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c47fd2cbdb1d7f295c25e6bfccfd78a84b6eef3055bc9f01b34ae861721b01ee"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_time",
+ "bevy_utils",
+]
+
+[[package]]
 name = "jni"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2391,9 +2405,9 @@ checksum = "74605f360ce573babfe43964cbe520294dcb081afbf8c108fc6e23036b4da2df"
 
 [[package]]
 name = "pythagorean-hodographs"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e356a3a6b5d723ef99478addc62391ab8c0955edc65a4e1fe954dff216c06cb4"
+checksum = "63e46556c3ece07949882b3af47a282339f0aff0c217f374b1f9c5a8c384a5cf"
 dependencies = [
  "glam",
  "itertools",
