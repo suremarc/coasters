@@ -50,7 +50,7 @@ pub fn ribbon(
 
     for frame in Resampler::new(curve, u_start, u_end, ds).map(|u| curve.frame(u)) {
         let p = frame.translation;
-        let x = frame.z_axis;
+        let x = frame.x_axis;
         let n = frame.y_axis;
 
         verts.push((p - w2 * x).to_array());

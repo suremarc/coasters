@@ -98,7 +98,7 @@ struct CoasterJointState {
 }
 
 impl CoasterJointState {
-    const MU: f32 = 0.0; // rolling friction
+    const MU: f32 = 0.1; // rolling friction
     const G: f32 = 0.075; // gravity
 
     fn advance(&mut self, curve: &(impl Curve3 + ?Sized), dt: f32) {
@@ -117,14 +117,14 @@ impl CoasterJointState {
 fn init_coasters(mut coasters: ResMut<Assets<Coaster>>) {
     coasters.add(Coaster {
         pts: vec![
-            vec3(6., 12., 1.),
-            vec3(0., 8., 2.),
+            vec3(13., 19., 8.),
+            vec3(10., 12., 7.),
+            vec3(9., 7., 6.),
+            vec3(8., 4., 6.),
+            vec3(6., 0., 6.),
             vec3(3., 4., 7.),
-            vec3(6., 0., 4.),
-            vec3(8., 4., 5.),
-            vec3(12., 2., 6.),
-            vec3(11., 10., 7.),
-            vec3(11., 19., 8.),
+            vec3(0., 8., 2.),
+            vec3(6., 12., 1.),
         ],
     });
 }
@@ -140,8 +140,7 @@ fn on_coaster_update(
     for ev in ev_asset.iter() {
         if let AssetEvent::Created { handle } = ev {
             let coaster = assets.get(handle).expect("asset should be loaded");
-            let entity = spawn_coaster(&mut commands, handle, coaster, &mut meshes, &mut materials);
-            // this is broken for now
+            spawn_coaster(&mut commands, handle, coaster, &mut meshes, &mut materials);
         }
     }
 }
@@ -247,7 +246,7 @@ fn lock_camera_to_coaster_joint(
     for (mut transform, joint) in query.iter_mut() {
         let coaster = coaster_query.get(joint.coaster).unwrap();
         let u = joint.state.u;
-        transform.as_mut().translation = coaster.p(u) + Vec3::from(coaster.frame(u).y_axis);
-        // transform.as_mut().rotation = coaster.quat(u);
+        transform.as_mut().rotation = coaster.quat(u);
+        transform.as_mut().translation = coaster.p(u) + transform.rotation.mul_vec3(Vec3::Y);
     }
 }
