@@ -99,15 +99,16 @@ struct CoasterJointState {
 
 impl CoasterJointState {
     const MU: f32 = 0.1; // rolling friction
-    const G: f32 = 0.075; // gravity
+    const G: f32 = 10.0; // gravity
 
     fn advance(&mut self, curve: &(impl Curve3 + ?Sized), dt: f32) {
         let dpdu = curve.dp(self.u);
         let d2pdu2 = curve.d2p(self.u);
 
-        let d2udt2 = -(Self::G * dpdu.y + Self::MU * Self::G * dpdu.mul(vec3(1., 0., 1.)).length())
-            * self.dudt
-            + dpdu.dot(d2pdu2) / dpdu.length_squared() * self.dudt.powi(2);
+        let d2udt2 = -(Self::G * dpdu.y
+            + Self::MU * Self::G * dpdu.mul(vec3(1., 0., 1.)).length() * self.dudt
+            + dpdu.dot(d2pdu2) * self.dudt.powi(2))
+            / dpdu.length_squared();
 
         self.dudt += d2udt2 * dt;
         self.u += self.dudt * dt;
@@ -117,14 +118,14 @@ impl CoasterJointState {
 fn init_coasters(mut coasters: ResMut<Assets<Coaster>>) {
     coasters.add(Coaster {
         pts: vec![
-            vec3(13., 19., 8.),
-            vec3(10., 12., 7.),
-            vec3(9., 7., 6.),
-            vec3(8., 4., 6.),
-            vec3(6., 0., 6.),
-            vec3(3., 4., 7.),
-            vec3(0., 8., 2.),
-            vec3(6., 12., 1.),
+            vec3(1., 12., 10.),
+            vec3(1., 8., 8.),
+            vec3(1., 4., 7.),
+            vec3(1., 0., 4.),
+            vec3(1., 4., 0.),
+            vec3(1., 2., -4.),
+            vec3(1., 10., -9.),
+            vec3(1., 19., -15.),
         ],
     });
 }
@@ -135,7 +136,6 @@ fn on_coaster_update(
     assets: Res<Assets<Coaster>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut cams: Query<Entity, With<FlyCam>>,
 ) {
     for ev in ev_asset.iter() {
         if let AssetEvent::Created { handle } = ev {
@@ -157,7 +157,7 @@ fn bind_player_to_coaster(
 
         commands.get_entity(entity).unwrap().insert(CoasterJoint {
             coaster: coaster_entity,
-            state: CoasterJointState { u: 0., dudt: 0.05 },
+            state: CoasterJointState { u: 0., dudt: 0.1 },
         });
         transform.rotation = spline.quat(0.);
     } else if keys.just_pressed(KeyCode::Q) {
