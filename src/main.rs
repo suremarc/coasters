@@ -118,14 +118,14 @@ impl CoasterJointState {
 fn init_coasters(mut coasters: ResMut<Assets<Coaster>>) {
     coasters.add(Coaster {
         pts: vec![
-            vec3(1., 12., 10.),
-            vec3(1., 8., 8.),
-            vec3(1., 4., 7.),
-            vec3(1., 0., 4.),
-            vec3(1., 4., 0.),
-            vec3(1., 2., -4.),
-            vec3(1., 10., -9.),
-            vec3(1., 19., -15.),
+            vec3(1., 12., 1.),
+            vec3(2., 8., 2.),
+            vec3(3., 4., 7.),
+            vec3(6., 0., 4.),
+            vec3(8., 4., 5.),
+            vec3(12., 2., 6.),
+            vec3(11., 10., 7.),
+            vec3(11., 19., 8.),
         ],
     });
 }
