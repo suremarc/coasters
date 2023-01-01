@@ -176,7 +176,7 @@ fn spawn_coaster(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) -> Entity {
-    let ds = 0.1;
+    let ds = 0.2;
 
     let start = bevy::utils::Instant::now();
     let spline = Spline::<QuinticPHCurve>::catmull_rom(&coaster.pts);

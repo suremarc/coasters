@@ -2405,14 +2405,15 @@ checksum = "74605f360ce573babfe43964cbe520294dcb081afbf8c108fc6e23036b4da2df"
 
 [[package]]
 name = "pythagorean-hodographs"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d67c2a61bf293b6319b9088b77e6bbd1142ecf5147684286c5928901fe87ef1"
+checksum = "f1b6ed4399dd43295a00a25f1cced1c0f59ae51dd70306ecdde00f56991b5c49"
 dependencies = [
  "glam",
  "itertools",
  "num-traits",
  "ordered-float",
+ "roots",
 ]
 
 [[package]]
@@ -2521,6 +2522,12 @@ dependencies = [
  "bitflags",
  "serde",
 ]
+
+[[package]]
+name = "roots"
+version = "0.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "082f11ffa03bbef6c2c6ea6bea1acafaade2fd9050ae0234ab44a2153742b058"
 
 [[package]]
 name = "rustc-hash"
