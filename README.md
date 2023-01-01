@@ -6,7 +6,7 @@ The track is generated using [pythagorean hodograph splines](https://github.com/
 
 Some desirable and/or interesting features for the future:
 
-* Real-time drag-and-drop editing of spline controls points & orientations
+* Real-time drag-and-drop editing of spline controls point & orientations
 * Visualization of velocity over time (and detection of stalling)
 * "Booster" segments that boost the player's velocity in a certain region
 * Exporting tracks to a file
