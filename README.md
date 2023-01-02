@@ -15,4 +15,4 @@ Some desirable and/or interesting features for the future:
 
 ## Instructions to run
 
-To run this project, simply do `cargo run --release`. That's it!
+To run this project, you will need to [install Rust](https://rustup.rs/). Once you've followed the instructions in the link, simply do `cargo run --release`. That's it!
