@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-use bevy::{math::vec3, prelude::*, reflect::TypeUuid};
+use bevy::{math::vec3, prelude::*, reflect::TypeUuid, window::WindowResolution};
 use bevy_flycam::{FlyCam, PlayerPlugin};
 use coasters::proc_mesh::Resampler;
 use iyes_loopless::prelude::*;
@@ -10,12 +10,10 @@ use serde::Deserialize;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            window: WindowDescriptor {
+            primary_window: Some(Window {
                 title: "Coasters!".to_string(),
-                width: 1280.,
-                height: 720.,
                 ..Default::default()
-            },
+            }),
             ..Default::default()
         }))
         .add_plugin(PlayerPlugin)
@@ -41,7 +39,10 @@ fn setup(
 
     // Plane
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 8.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane {
+            size: 8.0,
+            subdivisions: 0,
+        })),
         material: materials.add(Color::rgb(1., 0.9, 0.9).into()),
         transform: Transform::from_translation(Vec3::new(4., -1., 4.)),
         ..Default::default()
@@ -66,11 +67,8 @@ fn setup(
         .with_text_alignment(TextAlignment::BOTTOM_RIGHT)
         .with_style(Style {
             position_type: PositionType::Absolute,
-            position: UiRect {
-                bottom: Val::Px(5.0),
-                right: Val::Px(15.0),
-                ..default()
-            },
+            bottom: Val::Px(5.0),
+            right: Val::Px(15.0),
             ..default()
         }),
     );
